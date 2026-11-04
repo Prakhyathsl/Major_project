@@ -872,10 +872,10 @@
           <!-- Row 1: Three Summary Statistic Cards -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
 
-            <!-- Card 1: Total Incidents -->
+            <!-- Card 1: Total Eligible Incidents -->
             <div class="tactical-card p-5 lg:p-6 rounded-2xl border border-charcoal-700/80 shadow-xl transition-all">
               <div class="flex items-center justify-between text-slate-400 mb-2">
-                <span class="text-xs font-semibold uppercase tracking-wider">TOTAL INCIDENTS</span>
+                <span class="text-xs font-semibold uppercase tracking-wider">TOTAL ELIGIBLE INCIDENTS</span>
                 <div
                   class="w-8 h-8 rounded-lg bg-charcoal-900 border border-charcoal-700/80 flex items-center justify-center text-slate-300">
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -885,34 +885,34 @@
                 </div>
               </div>
               <div class="text-3xl lg:text-4xl font-bold font-mono text-white tracking-tight" id="dash-total-incidents">
-                15,730</div>
-              <span id="dash-total-desc" class="hidden"></span>
+                6,538</div>
+              <span id="dash-total-desc" class="text-[11px] text-slate-400 mt-1 block"></span>
             </div>
 
-            <!-- Card 2: Bengaluru Incidents -->
+            <!-- Card 2: Bengaluru Eligible Incidents -->
             <div
               class="tactical-card p-5 lg:p-6 rounded-2xl border-l-4 border-l-purpleCity-500 border-charcoal-700/80 shadow-xl transition-all">
               <div class="flex items-center justify-between text-purpleCity-400 mb-2">
-                <span class="text-xs font-semibold uppercase tracking-wider">BENGALURU INCIDENTS</span>
+                <span class="text-xs font-semibold uppercase tracking-wider">BENGALURU ELIGIBLE INCIDENTS</span>
                 <span
                   class="text-[10px] font-mono px-2 py-0.5 rounded bg-purpleCity-500/20 text-purpleCity-300 border border-purpleCity-500/30 font-semibold">BLR</span>
               </div>
               <div class="text-3xl lg:text-4xl font-bold font-mono text-purpleCity-400 tracking-tight"
-                id="dash-blr-incidents">9,859</div>
-              <span id="dash-blr-desc" class="hidden"></span>
+                id="dash-blr-incidents">5,023</div>
+              <span id="dash-blr-desc" class="text-[11px] text-purpleCity-400/80 mt-1 block"></span>
             </div>
 
-            <!-- Card 3: Mangaluru Incidents -->
+            <!-- Card 3: Mangaluru Eligible Incidents -->
             <div
               class="tactical-card p-5 lg:p-6 rounded-2xl border-l-4 border-l-beacon-500 border-charcoal-700/80 shadow-xl transition-all">
               <div class="flex items-center justify-between text-beacon-400 mb-2">
-                <span class="text-xs font-semibold uppercase tracking-wider">MANGALURU INCIDENTS</span>
+                <span class="text-xs font-semibold uppercase tracking-wider">MANGALURU ELIGIBLE INCIDENTS</span>
                 <span
                   class="text-[10px] font-mono px-2 py-0.5 rounded bg-beacon-500/20 text-beacon-400 border border-beacon-500/30 font-semibold">MLR</span>
               </div>
               <div class="text-3xl lg:text-4xl font-bold font-mono text-beacon-400 tracking-tight"
-                id="dash-mlr-incidents">5,871</div>
-              <span id="dash-mlr-desc" class="hidden"></span>
+                id="dash-mlr-incidents">1,515</div>
+              <span id="dash-mlr-desc" class="text-[11px] text-beacon-400/80 mt-1 block"></span>
             </div>
 
           </div>
@@ -1317,9 +1317,10 @@
 
               <!-- Layer Toggles -->
               <div class="flex items-center gap-2 flex-wrap">
-                <!-- Bengaluru Incident Toggle -->
+                <!-- Bengaluru Approximate Locality Toggle -->
                 <label
-                  class="flex items-center gap-1.5 cursor-pointer px-2.5 py-1.5 rounded bg-charcoal-900 border border-purpleCity-500/30 text-purpleCity-300 hover:border-purpleCity-500/60 transition-colors">
+                  class="flex items-center gap-1.5 cursor-pointer px-2.5 py-1.5 rounded bg-charcoal-900 border border-purpleCity-500/30 text-purpleCity-300 hover:border-purpleCity-500/60 transition-colors"
+                  title="Approximate locality crime markers for Bengaluru (5,023 records)">
                   <input id="toggle-blr-markers" type="checkbox" checked
                     class="accent-purple-500 w-3.5 h-3.5 rounded" />
                   <span>Bengaluru (BLR)</span>
@@ -1327,7 +1328,8 @@
 
                 <!-- Mangaluru Incident Toggle -->
                 <label
-                  class="flex items-center gap-1.5 cursor-pointer px-2.5 py-1.5 rounded bg-charcoal-900 border border-beacon-500/30 text-beacon-400 hover:border-beacon-500/60 transition-colors">
+                  class="flex items-center gap-1.5 cursor-pointer px-2.5 py-1.5 rounded bg-charcoal-900 border border-beacon-500/30 text-beacon-400 hover:border-beacon-500/60 transition-colors"
+                  title="Mangaluru incident records">
                   <input id="toggle-mlr-markers" type="checkbox" checked
                     class="accent-beacon-500 w-3.5 h-3.5 rounded" />
                   <span>Mangaluru (MLR)</span>
@@ -1380,22 +1382,29 @@
               </div>
             </div>
 
-            <!-- Compact Map Status Strip at Bottom -->
+            <!-- Compact Map Status Strip at Bottom with Dynamic Geographic Audit Breakdown -->
             <div
               class="px-4 py-2.5 bg-charcoal-950 border-t border-charcoal-700/80 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-400 font-mono">
               <div class="flex items-center gap-4 flex-wrap">
-                <span class="flex items-center gap-1.5 text-slate-300">
-                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>Plotted Incidents: <strong class="text-white font-bold"
-                      id="strip-plotted-count">652</strong></span>
-                </span>
-                <span>Total Records: <strong class="text-slate-200" id="strip-total-records">9,859</strong></span>
-                <span>Active Scope: <strong class="text-beacon-400" id="strip-active-city">Combined
-                    Sector</strong></span>
+                <span>Total Eligible: <strong class="text-white font-bold"
+                    id="strip-total-eligible">6,538</strong></span>
+                <span>BLR Approximate: <strong class="text-purpleCity-400 font-bold"
+                    id="strip-blr-approx">5,023</strong></span>
+                <span>MLR Approximate: <strong class="text-beacon-400 font-bold"
+                    id="strip-mlr-approx">1,515</strong></span>
+                <span>Verified Locations: <strong class="text-emerald-400 font-bold"
+                    id="strip-verified-count">0</strong></span>
+                <span>Visible in Viewport: <strong class="text-white font-bold"
+                    id="strip-visible-count">0</strong></span>
+                <span>Plotted: <strong class="text-slate-200 font-bold" id="strip-plotted-count">5,023</strong></span>
+                <span>Unverified (Excluded): <strong class="text-slate-400 font-bold"
+                    id="strip-unverified-count">7,208</strong></span>
+                <span>Mismatches (Excluded): <strong class="text-red-400 font-bold"
+                    id="strip-mismatch-count">910</strong></span>
               </div>
               <div class="flex items-center gap-3">
-                <span>Base Layer: <strong class="text-slate-300" id="strip-tile-provider">Standard Road Map
-                    (OpenStreetMap)</strong></span>
+                <span>Active Scope: <strong class="text-beacon-400" id="strip-active-city">Bengaluru Urban (Approximate
+                    Locality Markers)</strong></span>
               </div>
             </div>
 
@@ -1890,11 +1899,14 @@
 
     // Global application state
     const AppState = {
-      selectedCity: 'combined', // 'combined' | 'bengaluru' | 'mangaluru'
+      selectedCity: 'bengaluru', // 'bengaluru' | 'mangaluru' | 'combined'
       mapTileMode: 'map', // 'map' | 'sat'
       showBlrMarkers: true,
       showMlrMarkers: true,
       showRiskHeat: false,
+      loadedIncidentIds: new Set(),
+      activeFilterGeneration: 0,
+      activeCrimeFilter: null,
       data: {
         dashboard: null,
         heatmap: [],
@@ -1902,7 +1914,8 @@
         trends: null,
         places: {},
         recentIncidents: [],
-        incidents: []
+        incidents: [],
+        stats: null
       }
     };
 
@@ -1927,12 +1940,24 @@
     }
 
     // Incident marker icon (unclustered individual marker)
-    function createIncidentMarkerIcon(isBlr) {
-      const color = isBlr ? '#a855f7' : '#f97316';
-      const glow = isBlr ? 'rgba(168, 85, 247, 0.45)' : 'rgba(249, 115, 22, 0.45)';
+    function createIncidentMarkerIcon(isBlr, isVerified = false) {
+      let color, glow, label;
+      if (isVerified) {
+        color = '#10b981';
+        glow = 'rgba(16, 185, 129, 0.45)';
+        label = 'Verified Incident Location';
+      } else if (isBlr) {
+        color = '#a855f7';
+        glow = 'rgba(168, 85, 247, 0.45)';
+        label = 'Approximate Locality Marker';
+      } else {
+        color = '#f97316';
+        glow = 'rgba(249, 115, 22, 0.45)';
+        label = 'Approximate Locality Marker';
+      }
       return L.divIcon({
         html: `
-          <div style="position:relative; width:22px; height:22px; display:flex; align-items:center; justify-content:center; cursor:pointer;" class="beacon-marker-pin" title="Recorded Incident">
+          <div style="position:relative; width:22px; height:22px; display:flex; align-items:center; justify-content:center; cursor:pointer;" class="beacon-marker-pin" title="${label}">
             <div style="position:absolute; inset:0; background:${glow}; border-radius:50%; border:1.5px solid ${color};"></div>
             <div style="width:9px; height:9px; background:${color}; border-radius:50%; box-shadow:0 0 6px ${color};"></div>
           </div>
@@ -1957,18 +1982,22 @@
 
       const qStatus = record.location_quality || record.validation_status || 'LOCATION_UNVERIFIED';
       const qLabel = record.location_quality_label || getSimplifiedQualityLabel(qStatus);
-      const qBadgeClass = qStatus === 'INCIDENT_LOCATION_VERIFIED'
-        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-        : (qStatus === 'LOCALITY_MATCH_ONLY'
-          ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-          : (qStatus === 'POLICE_STATION_COORDINATE'
-            ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-            : 'bg-slate-500/15 text-slate-400 border-slate-500/30'));
+      const isApprox = (qStatus === 'LOCALITY_MATCH_ONLY');
+      const isVerified = (qStatus === 'INCIDENT_LOCATION_VERIFIED');
+
+      const displayLabel = isApprox ? 'Approximate Location' : (isVerified ? 'Verified location' : qLabel);
+      const qBadgeClass = isApprox
+        ? (isBlr
+          ? 'bg-purpleCity-500/20 text-purpleCity-300 border-purpleCity-500/40 font-semibold'
+          : 'bg-orange-500/20 text-orange-300 border-orange-500/40 font-semibold')
+        : (isVerified
+          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-semibold'
+          : 'bg-slate-500/20 text-slate-400 border-slate-500/40');
 
       const cityBadgeClass = isBlr
         ? 'bg-purpleCity-500/15 text-purpleCity-400 border-purpleCity-500/30'
         : 'bg-beacon-500/15 text-beacon-400 border-beacon-500/30';
-      const dotColor = isBlr ? '#a855f7' : '#f97316';
+      const dotColor = isVerified ? '#10b981' : (isBlr ? '#a855f7' : '#f97316');
 
       return `
         <div class="incident-popup-card p-3.5 w-[280px] sm:w-[310px] font-sans text-xs select-text">
@@ -1988,7 +2017,7 @@
                 ${escapeHtml(city)}
               </span>
               <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium border ${qBadgeClass}">
-                ${escapeHtml(qLabel)}
+                ${escapeHtml(displayLabel)}
               </span>
             </div>
           </div>
@@ -2000,6 +2029,8 @@
               <div>
                 <div class="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Recorded Area</div>
                 <div class="font-medium text-slate-100 popup-text text-xs mt-0.5 break-words">${escapeHtml(place)}</div>
+                ${isApprox ? `<div class="text-[9.5px] ${isBlr ? 'text-purpleCity-300/90' : 'text-orange-300/90'} pt-1 mt-1 border-t border-charcoal-750 font-sans">Approximate locality centroid &bull; Area-level record, not verified crime scene</div>` : ''}
+                ${isVerified ? `<div class="text-[9.5px] text-emerald-300/90 pt-1 mt-1 border-t border-charcoal-750 font-sans">Verified incident location</div>` : ''}
               </div>
               <div class="pt-1.5 border-t border-charcoal-750 popup-subdivider">
                 <div class="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Jurisdiction</div>
@@ -2214,8 +2245,19 @@
       });
 
       safetyMap.addLayer(markersLayer);
-
       heatLayer = L.layerGroup().addTo(safetyMap);
+
+      // Viewport movement handler for visible count and viewport loading
+      let moveDebounce = null;
+      safetyMap.on('moveend', () => {
+        clearTimeout(moveDebounce);
+        moveDebounce = setTimeout(() => {
+          updateVisibleMarkersCount();
+          if (AppState.selectedCity === 'bengaluru' && !AppState.activeCrimeFilter) {
+            fetchViewportIncidents();
+          }
+        }, 250);
+      });
     }
 
     function initRouteMap() {
@@ -2303,35 +2345,197 @@
     }
 
     // ==================== PLOTTING & RENDERERS ====================
+    function updateVisibleMarkersCount() {
+      if (!safetyMap || !markersLayer) return;
+      const bounds = safetyMap.getBounds();
+      let visible = 0;
+      markersLayer.eachLayer(m => {
+        if (bounds.contains(m.getLatLng())) visible++;
+      });
+      const el = document.getElementById('strip-visible-count');
+      if (el) el.textContent = visible.toLocaleString();
+    }
+
+    async function updateDynamicAuditCounters() {
+      try {
+        const cityParam = AppState.selectedCity || 'combined';
+        const res = await fetch(`${API_BASE}/incidents/stats?city=${cityParam}`);
+        if (!res.ok) return;
+        const stats = await res.json();
+        AppState.data.stats = stats;
+
+        const stripTotalEligible = document.getElementById('strip-total-eligible');
+        const stripBlrApprox = document.getElementById('strip-blr-approx');
+        const stripMlrApprox = document.getElementById('strip-mlr-approx');
+        const stripVerified = document.getElementById('strip-verified-count');
+        const stripUnverified = document.getElementById('strip-unverified-count');
+        const stripMismatch = document.getElementById('strip-mismatch-count');
+
+        if (stripTotalEligible) stripTotalEligible.textContent = (stats.total_eligible_incidents ?? 6538).toLocaleString();
+        if (stripBlrApprox) stripBlrApprox.textContent = (stats.bengaluru_approximate ?? 5023).toLocaleString();
+        if (stripMlrApprox) stripMlrApprox.textContent = (stats.mangaluru_approximate ?? 1515).toLocaleString();
+        if (stripVerified) stripVerified.textContent = (stats.verified_locations ?? 0).toLocaleString();
+        if (stripUnverified) stripUnverified.textContent = (stats.unverified_excluded ?? stats.location_unverified ?? 7208).toLocaleString();
+        if (stripMismatch) stripMismatch.textContent = (stats.mismatches_excluded ?? stats.location_mismatch ?? 910).toLocaleString();
+
+        updateVisibleMarkersCount();
+      } catch (e) {
+        console.warn('Error loading dynamic audit counters:', e);
+      }
+    }
+
+    // Guaranteed complete pagination retrieval for all 5,023 Bengaluru approximate records
+    async function loadBengaluruApproximateIncidents(crimeFilter = null) {
+      if (!markersLayer) return;
+      const gen = ++AppState.activeFilterGeneration;
+      AppState.activeCrimeFilter = crimeFilter;
+
+      // Rebuild and clear marker lifecycle
+      markersLayer.clearLayers();
+      for (const k in incidentMarkersMap) delete incidentMarkersMap[k];
+      AppState.loadedIncidentIds.clear();
+
+      let allRecords = [];
+      let offset = 0;
+      const pageSize = 2500;
+      let hasMore = true;
+      const filterParam = (crimeFilter && crimeFilter !== 'all') ? `&crime_type=${encodeURIComponent(crimeFilter)}` : '';
+
+      while (hasMore) {
+        try {
+          const res = await fetch(`${API_BASE}/incidents?city=bengaluru&classification=LOCALITY_MATCH_ONLY&limit=${pageSize}&offset=${offset}${filterParam}`);
+          if (!res.ok) break;
+          const data = await res.json();
+          if (gen !== AppState.activeFilterGeneration) return; // Discard stale response
+
+          const batch = data.incidents || [];
+          allRecords = allRecords.concat(batch);
+          offset += batch.length;
+
+          if (!data.has_more || batch.length === 0 || offset >= data.total) {
+            hasMore = false;
+          }
+        } catch (err) {
+          console.error('Error fetching Bengaluru approximate incidents:', err);
+          hasMore = false;
+        }
+      }
+
+      if (gen !== AppState.activeFilterGeneration) return;
+      AppState.data.bengaluruIncidents = allRecords;
+      AppState.data.incidents = allRecords;
+
+      renderSafetyMapMarkers();
+      updateDynamicAuditCounters();
+    }
+
+    // Guaranteed complete pagination retrieval for all 1,515 Mangaluru eligible records
+    async function loadMangaluruIncidents(crimeFilter = null) {
+      if (!markersLayer) return;
+      const gen = ++AppState.activeFilterGeneration;
+      AppState.activeCrimeFilter = crimeFilter;
+
+      let allRecords = [];
+      let offset = 0;
+      const pageSize = 2500;
+      let hasMore = true;
+      const filterParam = (crimeFilter && crimeFilter !== 'all') ? `&crime_type=${encodeURIComponent(crimeFilter)}` : '';
+
+      while (hasMore) {
+        try {
+          const res = await fetch(`${API_BASE}/incidents?city=mangaluru&limit=${pageSize}&offset=${offset}${filterParam}`);
+          if (!res.ok) break;
+          const data = await res.json();
+          if (gen !== AppState.activeFilterGeneration) return;
+
+          const batch = data.incidents || [];
+          allRecords = allRecords.concat(batch);
+          offset += batch.length;
+
+          if (!data.has_more || batch.length === 0 || offset >= data.total) {
+            hasMore = false;
+          }
+        } catch (err) {
+          console.error('Error fetching Mangaluru incidents:', err);
+          hasMore = false;
+        }
+      }
+
+      if (gen !== AppState.activeFilterGeneration) return;
+      AppState.data.mangaluruIncidents = allRecords;
+      renderSafetyMapMarkers();
+      updateDynamicAuditCounters();
+    }
+
+    // Viewport-based loading on pan/zoom
+    async function fetchViewportIncidents() {
+      if (!safetyMap || AppState.selectedCity !== 'bengaluru' || AppState.activeCrimeFilter) return;
+      const bounds = safetyMap.getBounds();
+      const minLat = bounds.getSouth();
+      const maxLat = bounds.getNorth();
+      const minLon = bounds.getWest();
+      const maxLon = bounds.getEast();
+      const gen = AppState.activeFilterGeneration;
+
+      try {
+        const res = await fetch(`${API_BASE}/incidents?city=bengaluru&classification=LOCALITY_MATCH_ONLY&min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}&limit=3000`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (gen !== AppState.activeFilterGeneration) return;
+
+        const newMarkers = [];
+        (data.incidents || []).forEach(inc => {
+          if (!inc.id || AppState.loadedIncidentIds.has(inc.id)) return;
+          const lat = typeof inc.latitude === 'number' ? inc.latitude : parseFloat(inc.latitude);
+          const lon = typeof inc.longitude === 'number' ? inc.longitude : parseFloat(inc.longitude);
+          if (isNaN(lat) || isNaN(lon)) return;
+
+          AppState.loadedIncidentIds.add(inc.id);
+          const marker = L.marker([lat, lon], {
+            icon: createIncidentMarkerIcon(true, false),
+            city: 'Bengaluru',
+            incidentId: inc.id
+          });
+          marker.bindPopup(renderIncidentPopup(inc), {
+            maxWidth: 360,
+            className: 'beacon-incident-popup'
+          });
+          incidentMarkersMap[inc.id] = marker;
+          newMarkers.push(marker);
+        });
+
+        if (newMarkers.length > 0) {
+          markersLayer.addLayers(newMarkers);
+          updateVisibleMarkersCount();
+          const stripCount = document.getElementById('strip-plotted-count');
+          if (stripCount) stripCount.textContent = markersLayer.getLayers().length.toLocaleString();
+        }
+      } catch (err) {
+        console.warn('Viewport load error:', err);
+      }
+    }
+
     function renderSafetyMapMarkers() {
       if (!safetyMap || !markersLayer) return;
 
       markersLayer.clearLayers();
       if (heatLayer) heatLayer.clearLayers();
       for (const k in incidentMarkersMap) delete incidentMarkersMap[k];
+      AppState.loadedIncidentIds.clear();
 
       const city = AppState.selectedCity;
       const overlay = document.getElementById('mlr-unavailable-overlay');
 
-      // Mangaluru dataset is fully loaded and active
       if (overlay) overlay.classList.add('hidden');
 
-      // Primary source: stratified actual incidents; Fallback: heatmap points if incidents not yet loaded
-      const incidents = AppState.data.incidents && AppState.data.incidents.length > 0
-        ? AppState.data.incidents
-        : (AppState.data.heatmap || []).map((p, idx) => ({
-          id: `BLR-CRIME-STN-${String(idx + 1).padStart(4, "0")}`,
-          crime_type: p.most_common || 'Recorded Crime',
-          place: p.police_station || 'Sector Area',
-          date: 'Verified Historical',
-          time: 'Recorded',
-          police_station: p.police_station,
-          latitude: p.lat,
-          longitude: p.lon,
-          city: 'Bengaluru',
-          status_badge: 'SOURCE RECORD'
-        }));
-
+      let incidents = [];
+      if (city === 'bengaluru') {
+        incidents = AppState.data.bengaluruIncidents || AppState.data.incidents || [];
+      } else if (city === 'mangaluru') {
+        incidents = AppState.data.mangaluruIncidents || (AppState.data.incidents || []).filter(i => (i.city || '').toLowerCase() === 'mangaluru');
+      } else {
+        incidents = AppState.data.incidents || [];
+      }
       let plottedCount = 0;
       const markersToAdd = [];
 
@@ -2351,7 +2555,25 @@
         if (isBlr && !AppState.showBlrMarkers) return;
         if (!isBlr && !AppState.showMlrMarkers) return;
 
-        const markerIcon = createIncidentMarkerIcon(isBlr);
+        // Authoritative geographic audit status filtering
+        const vStatus = inc.validation_status || inc.location_quality || 'LOCATION_UNVERIFIED';
+
+        // Strict isolation: only LOCALITY_MATCH_ONLY approximate records in the Bengaluru incident layer
+        if (isBlr && vStatus !== 'LOCALITY_MATCH_ONLY') {
+          return;
+        }
+
+        // Strict Mangaluru accuracy: only verified or locality match
+        if (!isBlr && vStatus !== 'LOCALITY_MATCH_ONLY' && vStatus !== 'INCIDENT_LOCATION_VERIFIED') {
+          return;
+        }
+
+        // Prevent duplicate marker registration
+        if (inc.id && AppState.loadedIncidentIds.has(inc.id)) return;
+        if (inc.id) AppState.loadedIncidentIds.add(inc.id);
+
+        const isVerified = (vStatus === 'INCIDENT_LOCATION_VERIFIED');
+        const markerIcon = createIncidentMarkerIcon(isBlr, isVerified);
         const marker = L.marker([lat, lon], {
           icon: markerIcon,
           city: isBlr ? 'Bengaluru' : 'Mangaluru',
@@ -2378,13 +2600,7 @@
       const stripCount = document.getElementById('strip-plotted-count');
       if (stripCount) stripCount.textContent = plottedCount.toLocaleString();
 
-      const stripTotal = document.getElementById('strip-total-records');
-      if (stripTotal && AppState.data.dashboard) {
-        const d = AppState.data.dashboard;
-        if (city === 'mangaluru') stripTotal.textContent = (d.mangaluru_records || 5871).toLocaleString();
-        else if (city === 'bengaluru') stripTotal.textContent = (d.bengaluru_records || 9859).toLocaleString();
-        else stripTotal.textContent = (d.total_crimes || 15730).toLocaleString();
-      }
+      updateVisibleMarkersCount();
     }
 
     // ==================== DASHBOARD HIGH-RISK ZONES & LOCATION INTELLIGENCE ====================
@@ -2471,7 +2687,7 @@
       }
     }
 
-        // Navigate to Safety Map and zoom to locality with guaranteed matching incident markers
+    // Navigate to Safety Map and zoom to locality with guaranteed matching incident markers
     async function focusHighRiskArea(lat, lon, locality, city, riskScore, incidentCount, category) {
       if (!safetyMap) return;
       switchNavPage('page-safety-map');
@@ -2986,47 +3202,57 @@
       });
     }
 
-    // Filter map markers by selected crime type
+    // Filter map markers by selected crime type querying full dataset
     function filterMapByCrimeCategory(category) {
       if (!markersLayer) return;
       switchNavPage('page-safety-map');
 
-      markersLayer.clearLayers();
-      for (const k in incidentMarkersMap) delete incidentMarkersMap[k];
+      if (AppState.selectedCity === 'bengaluru') {
+        showToast(`Filtering complete dataset for: ${category}...`, 'info');
+        loadBengaluruApproximateIncidents(category);
+      } else if (AppState.selectedCity === 'mangaluru') {
+        showToast(`Filtering Mangaluru dataset for: ${category}...`, 'info');
+        loadMangaluruIncidents(category);
+      } else {
+        markersLayer.clearLayers();
+        for (const k in incidentMarkersMap) delete incidentMarkersMap[k];
+        AppState.loadedIncidentIds.clear();
 
-      const incidents = AppState.data.incidents || [];
-      let count = 0;
-      const markersToAdd = [];
+        const incidents = AppState.data.incidents || [];
+        let count = 0;
+        const markersToAdd = [];
 
-      incidents.forEach(inc => {
-        const cType = (inc.crime_type || inc.type || '').toLowerCase();
-        if (cType.includes(category.toLowerCase())) {
-          const lat = typeof inc.latitude === 'number' ? inc.latitude : parseFloat(inc.latitude);
-          const lon = typeof inc.longitude === 'number' ? inc.longitude : parseFloat(inc.longitude);
+        incidents.forEach(inc => {
+          const cType = (inc.crime_type || inc.type || '').toLowerCase();
+          if (cType.includes(category.toLowerCase())) {
+            const lat = typeof inc.latitude === 'number' ? inc.latitude : parseFloat(inc.latitude);
+            const lon = typeof inc.longitude === 'number' ? inc.longitude : parseFloat(inc.longitude);
 
-          if (!isNaN(lat) && !isNaN(lon)) {
-            const isBlr = (inc.city || 'Bengaluru').toLowerCase() === 'bengaluru';
-            const marker = L.marker([lat, lon], {
-              icon: createIncidentMarkerIcon(isBlr),
-              city: inc.city || 'Bengaluru',
-              incidentId: inc.id
-            });
-            marker.bindPopup(renderIncidentPopup(inc), {
-              maxWidth: 360,
-              className: 'beacon-incident-popup'
-            });
+            if (!isNaN(lat) && !isNaN(lon)) {
+              const isBlr = (inc.city || 'Bengaluru').toLowerCase() === 'bengaluru';
+              const marker = L.marker([lat, lon], {
+                icon: createIncidentMarkerIcon(isBlr),
+                city: inc.city || 'Bengaluru',
+                incidentId: inc.id
+              });
+              marker.bindPopup(renderIncidentPopup(inc), {
+                maxWidth: 360,
+                className: 'beacon-incident-popup'
+              });
 
-            if (inc.id) incidentMarkersMap[inc.id] = marker;
-            markersToAdd.push(marker);
-            count++;
+              if (inc.id) incidentMarkersMap[inc.id] = marker;
+              markersToAdd.push(marker);
+              count++;
+            }
           }
-        }
-      });
+        });
 
-      markersLayer.addLayers(markersToAdd);
-      const stripCount = document.getElementById('strip-plotted-count');
-      if (stripCount) stripCount.textContent = count.toLocaleString();
-      showToast(`Filtered map: ${count} recorded incidents of ${category}`, 'info');
+        markersLayer.addLayers(markersToAdd);
+        const stripCount = document.getElementById('strip-plotted-count');
+        if (stripCount) stripCount.textContent = count.toLocaleString();
+        showToast(`Filtered map: ${count} recorded incidents of ${category}`, 'info');
+        updateVisibleMarkersCount();
+      }
     }
 
     // ==================== CITY SELECTOR LOGIC ====================
@@ -3055,16 +3281,16 @@
       const dashMlr = document.getElementById('dash-mlr-incidents');
 
       const d = AppState.data.dashboard;
-      const blrCount = d && d.bengaluru_records ? d.bengaluru_records.toLocaleString() : '9,859';
-      const mlrCount = d && d.mangaluru_records ? d.mangaluru_records.toLocaleString() : '5,871';
-      const totalCount = d && (d.total_crimes || (d.bengaluru_records + d.mangaluru_records))
-        ? (d.total_crimes || (d.bengaluru_records + d.mangaluru_records)).toLocaleString()
-        : '15,730';
+      const blrCount = d && d.bengaluru_eligible_incidents ? d.bengaluru_eligible_incidents.toLocaleString() : (d && d.bengaluru_records ? d.bengaluru_records.toLocaleString() : '5,023');
+      const mlrCount = d && d.mangaluru_eligible_incidents ? d.mangaluru_eligible_incidents.toLocaleString() : (d && d.mangaluru_records ? d.mangaluru_records.toLocaleString() : '1,515');
+      const totalCount = d && (d.total_eligible_incidents || (d.bengaluru_records + d.mangaluru_records))
+        ? (d.total_eligible_incidents || (d.bengaluru_records + d.mangaluru_records)).toLocaleString()
+        : '6,538';
 
       const dashDesc = document.getElementById('dash-total-desc');
 
       if (city === 'bengaluru') {
-        if (stripActiveCity) stripActiveCity.textContent = 'Bengaluru Urban';
+        if (stripActiveCity) stripActiveCity.textContent = 'Bengaluru Urban (Approximate Locality Markers)';
         if (cardTotal) cardTotal.textContent = blrCount;
         if (cardBlr) cardBlr.textContent = blrCount;
         if (cardMlr) cardMlr.textContent = '0';
@@ -3076,12 +3302,13 @@
           dashMlr.textContent = '0';
           dashMlr.className = 'text-3xl lg:text-4xl font-bold font-mono text-slate-500';
         }
-        if (dashDesc) dashDesc.textContent = 'Verified Bengaluru registry records';
+        if (dashDesc) dashDesc.textContent = 'Eligible Bengaluru approximate locality records';
 
         if (safetyMap) safetyMap.setView([12.9716, 77.5946], 12);
-        showToast('Dashboard filtered to Bengaluru Sector', 'info');
+        showToast('Safety Map focused on Bengaluru (5,023 Approximate Locality Centroids)', 'info');
+        loadBengaluruApproximateIncidents();
       } else if (city === 'mangaluru') {
-        if (stripActiveCity) stripActiveCity.textContent = 'Mangaluru Sector';
+        if (stripActiveCity) stripActiveCity.textContent = 'Mangaluru Sector (Approximate Locality Markers)';
         if (cardTotal) cardTotal.textContent = mlrCount;
         if (cardBlr) cardBlr.textContent = '0';
         if (cardMlr) cardMlr.textContent = mlrCount;
@@ -3093,10 +3320,11 @@
           dashMlr.textContent = mlrCount;
           dashMlr.className = 'text-3xl lg:text-4xl font-bold font-mono text-beacon-400';
         }
-        if (dashDesc) dashDesc.textContent = 'Verified Mangaluru registry records';
+        if (dashDesc) dashDesc.textContent = 'Eligible Mangaluru locality records';
 
         if (safetyMap) safetyMap.setView([12.9141, 74.8560], 12);
-        showToast('Dashboard filtered to Mangaluru Sector', 'info');
+        showToast('Safety Map focused on Mangaluru (1,515 Approximate Locality Records)', 'info');
+        loadMangaluruIncidents();
       } else {
         if (stripActiveCity) stripActiveCity.textContent = 'Combined State Scope (Bengaluru & Mangaluru)';
         if (cardTotal) cardTotal.textContent = totalCount;
@@ -3110,13 +3338,16 @@
           dashMlr.textContent = mlrCount;
           dashMlr.className = 'text-3xl lg:text-4xl font-bold font-mono text-beacon-400';
         }
-        if (dashDesc) dashDesc.textContent = 'Combined verified registry records across active sectors';
+        if (dashDesc) dashDesc.textContent = 'Combined eligible records across active sectors';
 
         if (safetyMap) safetyMap.setView([12.94, 76.2], 8);
         showToast('Combined View active (Bengaluru & Mangaluru)', 'info');
+        loadBengaluruApproximateIncidents();
+        loadMangaluruIncidents();
       }
 
       renderSafetyMapMarkers();
+      updateDynamicAuditCounters();
       renderHighRiskAreasList();
       renderRecentIncidentsFeed();
     }
@@ -4751,7 +4982,12 @@
         if (trendsRes.status === 'fulfilled') AppState.data.trends = trendsRes.value;
         if (placesRes.status === 'fulfilled') AppState.data.places = placesRes.value;
         if (recentRes.status === 'fulfilled') AppState.data.recentIncidents = recentRes.value.incidents || [];
-        if (incidentsRes.status === 'fulfilled') AppState.data.incidents = incidentsRes.value.incidents || [];
+        if (incidentsRes.status === 'fulfilled') {
+          const incs = incidentsRes.value.incidents || [];
+          AppState.data.incidents = incs;
+          AppState.data.mangaluruIncidents = incs.filter(i => (i.city || '').toLowerCase() === 'mangaluru');
+          AppState.data.bengaluruIncidents = incs.filter(i => (i.city || '').toLowerCase() === 'bengaluru');
+        }
 
         // Populate Place pickers
         const placeSelect = document.getElementById('risk-quick-place');
@@ -4778,9 +5014,9 @@
         // Update Summary Cards
         if (AppState.data.dashboard) {
           const d = AppState.data.dashboard;
-          const totalStr = (d.total_crimes || (d.bengaluru_records + d.mangaluru_records) || 15730).toLocaleString();
-          const blrStr = (d.bengaluru_records || 9859).toLocaleString();
-          const mlrStr = (d.mangaluru_records || 5871).toLocaleString();
+          const totalStr = (d.total_eligible_incidents || 6538).toLocaleString();
+          const blrStr = (d.bengaluru_eligible_incidents || 5023).toLocaleString();
+          const mlrStr = (d.mangaluru_eligible_incidents || 1515).toLocaleString();
 
           // Safety map page cards (if present)
           const cardTotal = document.getElementById('card-total-incidents');
@@ -4808,7 +5044,12 @@
           }
         }
 
-        renderSafetyMapMarkers();
+        if (AppState.selectedCity === 'bengaluru') {
+          loadBengaluruApproximateIncidents();
+        } else {
+          renderSafetyMapMarkers();
+        }
+        updateDynamicAuditCounters();
         renderHighRiskAreasList();
         renderRecentIncidentsFeed();
         renderPoliceStations(AppState.data.contacts);

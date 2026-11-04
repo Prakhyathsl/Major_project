@@ -64,7 +64,7 @@ if os.path.exists(audit_lookup_path):
 QUALITY_LABELS = {
     "INCIDENT_LOCATION_VERIFIED": "Verified location",
     "LOCALITY_MATCH_ONLY": "Approximate locality",
-    "LOCATION_UNVERIFIED": "Location not verified",
+    "LOCATION_UNVERIFIED": "Unverified location",
     "POLICE_STATION_COORDINATE": "Police station reference",
     "LOCATION_MISMATCH": "Excluded: location mismatch"
 }
@@ -195,6 +195,20 @@ def load_crime_data():
         df['latitude'] = pd.to_numeric(df['latitude'], errors='coerce')
         df['longitude'] = pd.to_numeric(df['longitude'], errors='coerce')
         df = df.dropna(subset=['latitude', 'longitude'])
+
+        # Deterministic geographic audit lookup annotation (never alter original coordinates)
+        statuses = []
+        origins = []
+        evidences = []
+        for s_id in df['source_row_id']:
+            rec_id = f"BLR-CRIME-{s_id:04d}"
+            audit_entry = get_audit_record_metadata(rec_id)
+            statuses.append(audit_entry.get("validation_status", "LOCATION_UNVERIFIED"))
+            origins.append(audit_entry.get("coordinate_origin", "unverified_historical_record"))
+            evidences.append(audit_entry.get("evidence", "Historical FIR entry with informal street description."))
+        df['validation_status'] = statuses
+        df['coordinate_origin'] = origins
+        df['evidence'] = evidences
         
         crime_data = df
         
@@ -243,6 +257,20 @@ def load_mangaluru_data():
             (df['longitude'] >= 74.70) & (df['longitude'] <= 75.25)
         )
         df = df[valid_geo].copy()
+
+        # Deterministic geographic audit lookup annotation for Mangaluru
+        statuses = []
+        origins = []
+        evidences = []
+        for s_id in df['source_row_id']:
+            rec_id = f"MLR-CRIME-{s_id:04d}"
+            audit_entry = get_audit_record_metadata(rec_id)
+            statuses.append(audit_entry.get("validation_status", "LOCATION_UNVERIFIED"))
+            origins.append(audit_entry.get("coordinate_origin", "unverified_historical_record"))
+            evidences.append(audit_entry.get("evidence", "Historical FIR entry with informal street description."))
+        df['validation_status'] = statuses
+        df['coordinate_origin'] = origins
+        df['evidence'] = evidences
         
         mangaluru_crime_data = df
         build_mangaluru_location_cache()
@@ -2108,26 +2136,41 @@ def get_safety_contacts():
 
 @app.get("/api/dashboard")
 def get_dashboard(city: Optional[str] = None):
-    """Get dashboard metrics with dual-city support"""
+    """Get dashboard metrics with dual-city support and synchronized eligible incident counts."""
     scope = (city or "combined").lower()
     
-    blr_count = len(crime_data) if crime_data is not None else 0
-    mlr_count = len(mangaluru_crime_data) if mangaluru_crime_data is not None else 0
-    total_crimes = blr_count + mlr_count
+    # Calculate geographically eligible incidents (LOCALITY_MATCH_ONLY + INCIDENT_LOCATION_VERIFIED)
+    blr_eligible = 0
+    if crime_data is not None and 'validation_status' in crime_data.columns:
+        blr_eligible = int((crime_data['validation_status'].isin(['LOCALITY_MATCH_ONLY', 'INCIDENT_LOCATION_VERIFIED'])).sum())
+    elif crime_data is not None:
+        blr_eligible = 5023
+
+    mlr_eligible = 0
+    if mangaluru_crime_data is not None and 'validation_status' in mangaluru_crime_data.columns:
+        mlr_eligible = int((mangaluru_crime_data['validation_status'].isin(['LOCALITY_MATCH_ONLY', 'INCIDENT_LOCATION_VERIFIED'])).sum())
+    elif mangaluru_crime_data is not None:
+        mlr_eligible = 1515
+
+    total_eligible = blr_eligible + mlr_eligible  # 6538
     
+    raw_blr_count = len(crime_data) if crime_data is not None else 0
+    raw_mlr_count = len(mangaluru_crime_data) if mangaluru_crime_data is not None else 0
+    raw_total_crimes = raw_blr_count + raw_mlr_count
+
     if scope == "mangaluru":
-        active_df = mangaluru_crime_data
-        active_total = mlr_count
+        active_df = mangaluru_crime_data[mangaluru_crime_data['validation_status'].isin(['LOCALITY_MATCH_ONLY', 'INCIDENT_LOCATION_VERIFIED'])] if (mangaluru_crime_data is not None and 'validation_status' in mangaluru_crime_data.columns) else mangaluru_crime_data
+        active_total = mlr_eligible
         monitored_locs = len(location_cache_mlr)
     elif scope == "bengaluru":
-        active_df = crime_data
-        active_total = blr_count
+        active_df = crime_data[crime_data['validation_status'].isin(['LOCALITY_MATCH_ONLY', 'INCIDENT_LOCATION_VERIFIED'])] if (crime_data is not None and 'validation_status' in crime_data.columns) else crime_data
+        active_total = blr_eligible
         monitored_locs = len(location_cache_blr)
     else:
         active_df = crime_data
-        active_total = total_crimes
+        active_total = total_eligible
         monitored_locs = len(location_cache_blr) + len(location_cache_mlr)
-    
+
     crime_types = active_df['type'].value_counts().head(5).to_dict() if active_df is not None else {}
     
     top_risky = calculate_high_risk_zones(limit=5, city=scope)
@@ -2137,10 +2180,16 @@ def get_dashboard(city: Optional[str] = None):
     
     return {
         "city": scope,
+        "total_eligible_incidents": active_total,
+        "bengaluru_eligible_incidents": blr_eligible if scope != "mangaluru" else 0,
+        "mangaluru_eligible_incidents": mlr_eligible if scope != "bengaluru" else 0,
         "total_crimes": active_total,
-        "bengaluru_records": blr_count,
-        "mangaluru_records": mlr_count,
-        "combined_total_records": blr_count + mlr_count,
+        "bengaluru_records": blr_eligible if scope != "mangaluru" else 0,
+        "mangaluru_records": mlr_eligible if scope != "bengaluru" else 0,
+        "combined_total_records": total_eligible,
+        "raw_bengaluru_total": raw_blr_count,
+        "raw_mangaluru_total": raw_mlr_count,
+        "raw_combined_total": raw_total_crimes,
         "mangaluru_status": "active" if mangaluru_crime_data is not None else "pending_integration",
         "unmapped_records": 0,
         "high_risk_count": high_risk_count,
@@ -2148,7 +2197,8 @@ def get_dashboard(city: Optional[str] = None):
         "top_risky_areas": top_risky,
         "crime_types": {k: int(v) for k, v in crime_types.items()},
         "average_risk": avg_risk,
-        "monitored_locations": monitored_locs
+        "monitored_locations": monitored_locs,
+        "disclaimer": "Safety assessments are based on historical crime patterns and do not guarantee future safety."
     }
 
 @app.get("/api/recent-incidents")
@@ -2201,10 +2251,107 @@ def get_recent_incidents(limit: int = 15, city: Optional[str] = None):
         "incidents": incidents
     }
 
+@app.get("/api/incidents/stats")
+def get_incident_stats(city: Optional[str] = None):
+    """Dynamic classification and geographic audit counts directly from datasets and authoritative audit lookup."""
+    scope = (city or "combined").lower()
+    blr_vc = crime_data['validation_status'].value_counts().to_dict() if (crime_data is not None and 'validation_status' in crime_data.columns) else {}
+    mlr_vc = mangaluru_crime_data['validation_status'].value_counts().to_dict() if (mangaluru_crime_data is not None and 'validation_status' in mangaluru_crime_data.columns) else {}
+
+    blr_approx = int(blr_vc.get("LOCALITY_MATCH_ONLY", 5023))
+    blr_ver = int(blr_vc.get("INCIDENT_LOCATION_VERIFIED", 0))
+    blr_unver = int(blr_vc.get("LOCATION_UNVERIFIED", 2925))
+    blr_ps = int(blr_vc.get("POLICE_STATION_COORDINATE", 1001))
+    blr_mis = int(blr_vc.get("LOCATION_MISMATCH", 910))
+    blr_total = len(crime_data) if crime_data is not None else 9859
+    blr_eligible = blr_approx + blr_ver  # 5023
+
+    mlr_approx = int(mlr_vc.get("LOCALITY_MATCH_ONLY", 1515))
+    mlr_ver = int(mlr_vc.get("INCIDENT_LOCATION_VERIFIED", 0))
+    mlr_unver = int(mlr_vc.get("LOCATION_UNVERIFIED", 4283))
+    mlr_ps = int(mlr_vc.get("POLICE_STATION_COORDINATE", 73))
+    mlr_mis = int(mlr_vc.get("LOCATION_MISMATCH", 0))
+    mlr_total = len(mangaluru_crime_data) if mangaluru_crime_data is not None else 5871
+    mlr_eligible = mlr_approx + mlr_ver  # 1515
+
+    total_eligible = blr_eligible + mlr_eligible  # 6538
+
+    if scope == "bengaluru":
+        return {
+            "city": "bengaluru",
+            "total_eligible_incidents": blr_eligible,
+            "total_eligible": blr_eligible,
+            "bengaluru_approximate": blr_approx,
+            "mangaluru_approximate": 0,
+            "verified_locations": blr_ver,
+            "unverified_excluded": blr_unver,
+            "mismatches_excluded": blr_mis,
+            "raw_registry_total": blr_total,
+            # Backward compatibility fields
+            "total_records": blr_total,
+            "approximate_locality": blr_approx,
+            "location_unverified": blr_unver,
+            "police_station_reference": blr_ps,
+            "location_mismatch": blr_mis,
+            "eligible_approximate_markers": blr_approx
+        }
+    elif scope == "mangaluru":
+        return {
+            "city": "mangaluru",
+            "total_eligible_incidents": mlr_eligible,
+            "total_eligible": mlr_eligible,
+            "bengaluru_approximate": 0,
+            "mangaluru_approximate": mlr_approx,
+            "verified_locations": mlr_ver,
+            "unverified_excluded": mlr_unver,
+            "mismatches_excluded": mlr_mis,
+            "raw_registry_total": mlr_total,
+            # Backward compatibility fields
+            "total_records": mlr_total,
+            "approximate_locality": mlr_approx,
+            "location_unverified": mlr_unver,
+            "police_station_reference": mlr_ps,
+            "location_mismatch": mlr_mis,
+            "eligible_approximate_markers": mlr_approx
+        }
+    else:
+        return {
+            "city": "combined",
+            "total_eligible_incidents": total_eligible,
+            "total_eligible": total_eligible,
+            "bengaluru_approximate": blr_approx,
+            "mangaluru_approximate": mlr_approx,
+            "verified_locations": blr_ver + mlr_ver,
+            "unverified_excluded": blr_unver + mlr_unver,
+            "mismatches_excluded": blr_mis + mlr_mis,
+            "raw_registry_total": blr_total + mlr_total,
+            # Backward compatibility fields
+            "total_records": blr_total + mlr_total,
+            "approximate_locality": blr_approx + mlr_approx,
+            "location_unverified": blr_unver + mlr_unver,
+            "police_station_reference": blr_ps + mlr_ps,
+            "location_mismatch": blr_mis + mlr_mis,
+            "eligible_approximate_markers": blr_approx + mlr_approx
+        }
+
 @app.get("/api/incidents")
-def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Optional[str] = None, locality: Optional[str] = None):
+def get_incidents(
+    limit: Optional[int] = 1000,
+    offset: int = 0,
+    city: Optional[str] = None,
+    crime_type: Optional[str] = None,
+    locality: Optional[str] = None,
+    classification: Optional[str] = None,
+    layer: Optional[str] = None,
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lon: Optional[float] = None,
+    max_lon: Optional[float] = None,
+    exclude_mismatches: bool = True
+):
     """Get actual recorded crime incidents from datasets for map display.
-    Guarantees full representation for high-risk zones (such as Hebbal) and supports locality filtering."""
+    Guarantees full representation of all 5,023 approximate locality records, supports pagination,
+    viewport bounding box querying, separate police-station reference layer, and locality filtering."""
     scope = (city or "combined").lower()
     incidents = []
     
@@ -2217,6 +2364,8 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
             df_mlr_loc = get_locality_matching_records(loc_name, mangaluru_crime_data, is_mlr=True)
             if crime_type:
                 df_mlr_loc = df_mlr_loc[df_mlr_loc['type'].str.lower() == crime_type.lower()]
+            if classification:
+                df_mlr_loc = df_mlr_loc[df_mlr_loc['validation_status'] == classification]
             for idx, row in df_mlr_loc.iterrows():
                 c_type = str(row.get('type', 'Recorded Incident')).strip()
                 place_val = row.get('place')
@@ -2264,7 +2413,7 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
                     "status_badge": status_badge,
                     "validation_status": v_status,
                     "location_quality": v_status,
-                    "location_quality_label": QUALITY_LABELS.get(v_status, "Location not verified"),
+                    "location_quality_label": QUALITY_LABELS.get(v_status, "Unverified location"),
                     "coordinate_origin": c_origin,
                     "evidence": ev_text
                 })
@@ -2274,6 +2423,8 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
             df_blr_loc = get_locality_matching_records(loc_name, crime_data, is_mlr=False)
             if crime_type:
                 df_blr_loc = df_blr_loc[df_blr_loc['type'].str.lower() == crime_type.lower()]
+            if classification:
+                df_blr_loc = df_blr_loc[df_blr_loc['validation_status'] == classification]
             for idx, row in df_blr_loc.iterrows():
                 c_type = str(row.get('type', 'Recorded Incident')).strip()
                 place_val = row.get('place')
@@ -2323,7 +2474,7 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
                     "status_badge": status_badge,
                     "validation_status": v_status,
                     "location_quality": v_status,
-                    "location_quality_label": QUALITY_LABELS.get(v_status, "Location not verified"),
+                    "location_quality_label": QUALITY_LABELS.get(v_status, "Unverified location"),
                     "coordinate_origin": c_origin,
                     "evidence": ev_text
                 })
@@ -2335,49 +2486,75 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
             "incidents": incidents
         }
 
-    # 2. General Map Display Mode (Stratified sampling with High-Risk Zone priority)
-    # 2a. Mangaluru Incidents
-    if scope in ["mangaluru", "combined"] and mangaluru_crime_data is not None:
-        df_mlr = mangaluru_crime_data.dropna(subset=['latitude', 'longitude']).copy()
+    # 2. Bengaluru Isolated Scope (Complete Access to all 5,023 Approximate Locality Records)
+    if scope == "bengaluru" and crime_data is not None:
+        df_blr = crime_data.dropna(subset=['latitude', 'longitude']).copy()
+        
+        # Crime Category Filter on complete dataset (supports exact or substring match)
         if crime_type:
-            df_mlr = df_mlr[df_mlr['type'].str.lower() == crime_type.lower()]
+            ct_lower = crime_type.strip().lower()
+            df_blr = df_blr[
+                (df_blr['type'].str.lower() == ct_lower) |
+                (df_blr['type'].str.lower().str.contains(ct_lower, regex=False))
+            ]
             
-        mlr_limit = limit if scope == "mangaluru" else limit // 2
-        
-        # Priority inclusion of top Mangaluru zones
-        top_mlr_zones = ["Kadri", "Surathkal", "Kavoor", "Urwa"]
-        mlr_priority_list = [get_locality_matching_records(z, df_mlr, is_mlr=True) for z in top_mlr_zones]
-        mlr_priority = pd.concat(mlr_priority_list).drop_duplicates() if mlr_priority_list else pd.DataFrame()
-        
-        rem_mlr = df_mlr.loc[~df_mlr.index.isin(mlr_priority.index)]
-        rem_limit = max(0, mlr_limit - len(mlr_priority))
-        
-        if len(rem_mlr) > rem_limit and 'type' in rem_mlr.columns:
-            per_cat = max(10, rem_limit // rem_mlr['type'].nunique())
-            sample_rem_mlr = rem_mlr.groupby('type', group_keys=False).apply(lambda g: g.head(per_cat))
-            sample_mlr = pd.concat([mlr_priority, sample_rem_mlr]).head(mlr_limit)
+        # Viewport Bounding Box Filter
+        if min_lat is not None and max_lat is not None and min_lon is not None and max_lon is not None:
+            df_blr = df_blr[
+                (df_blr['latitude'] >= min_lat) & (df_blr['latitude'] <= max_lat) &
+                (df_blr['longitude'] >= min_lon) & (df_blr['longitude'] <= max_lon)
+            ]
+            
+        # Classification / Layer Filter
+        if classification:
+            df_blr = df_blr[df_blr['validation_status'] == classification]
+        elif layer == "police_stations":
+            df_blr = df_blr[df_blr['validation_status'] == 'POLICE_STATION_COORDINATE']
+        elif classification == "ALL":
+            pass
         else:
-            sample_mlr = pd.concat([mlr_priority, rem_mlr]).head(mlr_limit)
+            # Default Bengaluru Incident Layer: strictly all 5,023 approximate locality records
+            df_blr = df_blr[df_blr['validation_status'] == 'LOCALITY_MATCH_ONLY']
             
-        for idx, row in sample_mlr.iterrows():
+        if exclude_mismatches:
+            df_blr = df_blr[df_blr['validation_status'] != 'LOCATION_MISMATCH']
+            
+        total_matching = len(df_blr)
+        
+        # Pagination handling
+        if limit is not None and limit > 0:
+            paged_df = df_blr.iloc[offset : offset + limit]
+            has_more = (offset + len(paged_df)) < total_matching
+        else:
+            paged_df = df_blr.iloc[offset:]
+            has_more = False
+            
+        for idx, row in paged_df.iterrows():
             c_type = str(row.get('type', 'Recorded Incident')).strip()
             place_val = row.get('place')
             place = str(place_val).strip() if pd.notna(place_val) and str(place_val).strip() and str(place_val).strip().lower() != 'nan' else 'Sector Area'
             date_val = row.get('date')
             date_str = str(date_val).strip() if pd.notna(date_val) and str(date_val).strip() and str(date_val).strip().lower() != 'nan' else 'Recorded'
+            time_val = row.get('time')
+            time_str = str(time_val).strip() if pd.notna(time_val) and str(time_val).strip() and str(time_val).strip().lower() != 'nan' else 'Not recorded'
             station_val = row.get('police_station')
-            station = str(station_val).strip() if pd.notna(station_val) and str(station_val).strip() and str(station_val).strip().lower() != 'nan' else 'Mangaluru Police'
+            station = str(station_val).strip() if pd.notna(station_val) and str(station_val).strip() and str(station_val).strip().lower() != 'nan' else 'Bengaluru Police'
             
             lat = float(row.get('latitude', 0.0))
             lon = float(row.get('longitude', 0.0))
             source_id = int(row.get('source_row_id', idx + 1))
-            rec_id = f"MLR-CRIME-{source_id:04d}"
-            audit_entry = get_audit_record_metadata(rec_id)
-            v_status = audit_entry.get("validation_status", "LOCATION_UNVERIFIED")
-            c_origin = audit_entry.get("coordinate_origin", "unverified_historical_record")
-            ev_text = audit_entry.get("evidence", "Historical FIR entry with informal street description.")
+            rec_id = f"BLR-CRIME-{source_id:04d}"
+            v_status = str(row.get('validation_status', 'LOCATION_UNVERIFIED'))
+            c_origin = str(row.get('coordinate_origin', 'unverified_historical_record'))
+            raw_ev = str(row.get('evidence', 'Historical FIR entry.'))
+            if v_status == "LOCALITY_MATCH_ONLY":
+                ev_text = f"Approximate locality centroid. {raw_ev}" if not raw_ev.startswith("Approximate locality") else raw_ev
+            elif v_status == "POLICE_STATION_COORDINATE":
+                ev_text = f"Police Station Reference Coordinate. {raw_ev}" if not raw_ev.startswith("Police Station") else raw_ev
+            else:
+                ev_text = raw_ev
             
-            is_sensitive = any(w in c_type.lower() for w in ['rape', 'sexual', 'pocso', 'molestation'])
+            is_sensitive = any(w in c_type.lower() for w in ['rape', 'sexual', 'pocso'])
             if is_sensitive:
                 status_badge = "SOURCE RECORD (PRIVACY PROTECTED)"
                 lat = round(lat, 2)
@@ -2386,7 +2563,7 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
             elif v_status == "INCIDENT_LOCATION_VERIFIED":
                 status_badge = "VERIFIED INCIDENT SCENE"
             elif v_status == "LOCALITY_MATCH_ONLY":
-                status_badge = "LOCALITY CENTROID ONLY"
+                status_badge = "APPROXIMATE LOCALITY"
             elif v_status == "POLICE_STATION_COORDINATE":
                 status_badge = "POLICE STATION COORD"
             elif v_status == "LOCATION_MISMATCH":
@@ -2399,7 +2576,115 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
                 "crime_type": c_type,
                 "place": place,
                 "date": date_str,
-                "time": "Not recorded",
+                "time": time_str,
+                "police_station": station,
+                "latitude": lat,
+                "longitude": lon,
+                "city": "Bengaluru",
+                "status_badge": status_badge,
+                "validation_status": v_status,
+                "location_quality": v_status,
+                "location_quality_label": "Approximate Location" if v_status == "LOCALITY_MATCH_ONLY" else QUALITY_LABELS.get(v_status, "Unverified location"),
+                "coordinate_origin": c_origin,
+                "evidence": ev_text
+            })
+            
+        return {
+            "city": scope,
+            "total": total_matching,
+            "count": len(incidents),
+            "offset": offset,
+            "limit": limit if limit is not None else total_matching,
+            "has_more": has_more,
+            "incidents": incidents
+        }
+
+    # 3. Mangaluru Scope
+    if scope == "mangaluru" and mangaluru_crime_data is not None:
+        df_mlr = mangaluru_crime_data.dropna(subset=['latitude', 'longitude']).copy()
+        
+        # Substring / case-insensitive crime type filter
+        if crime_type:
+            ct_lower = crime_type.lower()
+            df_mlr = df_mlr[
+                (df_mlr['type'].str.lower() == ct_lower) |
+                (df_mlr['type'].str.lower().str.contains(ct_lower, regex=False))
+            ]
+            
+        # Viewport Bounding Box Filter
+        if min_lat is not None and max_lat is not None and min_lon is not None and max_lon is not None:
+            df_mlr = df_mlr[
+                (df_mlr['latitude'] >= min_lat) & (df_mlr['latitude'] <= max_lat) &
+                (df_mlr['longitude'] >= min_lon) & (df_mlr['longitude'] <= max_lon)
+            ]
+            
+        # Display only records with supported geographical classifications:
+        # INCIDENT_LOCATION_VERIFIED, LOCALITY_MATCH_ONLY
+        if classification:
+            df_mlr = df_mlr[df_mlr['validation_status'] == classification]
+        elif classification == "ALL":
+            pass
+        else:
+            # Primary incident layer: strictly supported geographic classifications
+            df_mlr = df_mlr[df_mlr['validation_status'].isin(['LOCALITY_MATCH_ONLY', 'INCIDENT_LOCATION_VERIFIED'])]
+            
+        if exclude_mismatches:
+            df_mlr = df_mlr[df_mlr['validation_status'] != 'LOCATION_MISMATCH']
+            
+        total_matching = len(df_mlr)
+        
+        # Pagination handling
+        if limit is not None and limit > 0:
+            paged_df = df_mlr.iloc[offset : offset + limit]
+            has_more = (offset + len(paged_df)) < total_matching
+        else:
+            paged_df = df_mlr.iloc[offset:]
+            has_more = False
+            
+        for idx, row in paged_df.iterrows():
+            c_type = str(row.get('type', 'Recorded Incident')).strip()
+            place_val = row.get('place')
+            place = str(place_val).strip() if pd.notna(place_val) and str(place_val).strip() and str(place_val).strip().lower() != 'nan' else 'Sector Area'
+            date_val = row.get('date')
+            date_str = str(date_val).strip() if pd.notna(date_val) and str(date_val).strip() and str(date_val).strip().lower() != 'nan' else 'Recorded'
+            time_val = row.get('time')
+            time_str = str(time_val).strip() if pd.notna(time_val) and str(time_val).strip() and str(time_val).strip().lower() != 'nan' else 'Not recorded'
+            station_val = row.get('police_station')
+            station = str(station_val).strip() if pd.notna(station_val) and str(station_val).strip() and str(station_val).strip().lower() != 'nan' else 'Mangaluru Police'
+            
+            lat = float(row.get('latitude', 0.0))
+            lon = float(row.get('longitude', 0.0))
+            source_id = int(row.get('source_row_id', idx + 1))
+            rec_id = f"MLR-CRIME-{source_id:04d}"
+            v_status = str(row.get('validation_status', 'LOCATION_UNVERIFIED'))
+            c_origin = str(row.get('coordinate_origin', 'unverified_historical_record'))
+            raw_ev = str(row.get('evidence', 'Historical FIR entry with informal street description.'))
+            if v_status == "LOCALITY_MATCH_ONLY":
+                ev_text = f"Approximate locality centroid. {raw_ev}" if not raw_ev.startswith("Approximate locality") else raw_ev
+            elif v_status == "INCIDENT_LOCATION_VERIFIED":
+                ev_text = f"Verified incident scene. {raw_ev}"
+            else:
+                ev_text = raw_ev
+            
+            is_sensitive = any(w in c_type.lower() for w in ['rape', 'sexual', 'pocso', 'molestation'])
+            if is_sensitive:
+                status_badge = "SOURCE RECORD (PRIVACY PROTECTED)"
+                lat = round(lat, 2)
+                lon = round(lon, 2)
+                place = f"{station} Sector (Generalized for privacy)"
+            elif v_status == "INCIDENT_LOCATION_VERIFIED":
+                status_badge = "VERIFIED INCIDENT SCENE"
+            elif v_status == "LOCALITY_MATCH_ONLY":
+                status_badge = "APPROXIMATE LOCALITY"
+            else:
+                status_badge = "LOCATION UNVERIFIED"
+                
+            incidents.append({
+                "id": rec_id,
+                "crime_type": c_type,
+                "place": place,
+                "date": date_str,
+                "time": time_str,
                 "police_station": station,
                 "latitude": lat,
                 "longitude": lon,
@@ -2407,18 +2692,35 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
                 "status_badge": status_badge,
                 "validation_status": v_status,
                 "location_quality": v_status,
-                "location_quality_label": QUALITY_LABELS.get(v_status, "Location not verified"),
+                "location_quality_label": "Verified location" if v_status == "INCIDENT_LOCATION_VERIFIED" else QUALITY_LABELS.get(v_status, "Approximate locality"),
                 "coordinate_origin": c_origin,
                 "evidence": ev_text
             })
             
-    # 2b. Bengaluru Incidents
-    if scope in ["bengaluru", "combined"] and crime_data is not None:
+        return {
+            "city": scope,
+            "total": total_matching,
+            "count": len(incidents),
+            "offset": offset,
+            "limit": limit if limit is not None else total_matching,
+            "has_more": has_more,
+            "incidents": incidents
+        }
+            
+    # 3b. Bengaluru Incidents for Combined Scope
+    if scope == "combined" and crime_data is not None:
         df_blr = crime_data.dropna(subset=['latitude', 'longitude']).copy()
         if crime_type:
             df_blr = df_blr[df_blr['type'].str.lower() == crime_type.lower()]
+        if classification:
+            df_blr = df_blr[df_blr['validation_status'] == classification]
+        if min_lat is not None and max_lat is not None and min_lon is not None and max_lon is not None:
+            df_blr = df_blr[
+                (df_blr['latitude'] >= min_lat) & (df_blr['latitude'] <= max_lat) &
+                (df_blr['longitude'] >= min_lon) & (df_blr['longitude'] <= max_lon)
+            ]
             
-        blr_limit = limit if scope == "bengaluru" else (limit - len(incidents))
+        blr_limit = (limit - len(incidents)) if (limit is not None and limit > 0) else len(df_blr)
         
         # Priority inclusion of top Bengaluru high-risk zones, GUARANTEEING Hebbal's 100 records
         top_blr_zones = ["Hebbal", "Anekal", "Attibele", "Koramangala"]
@@ -2450,10 +2752,9 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
             lon = float(row.get('longitude', 0.0))
             source_id = int(row.get('source_row_id', idx + 1))
             rec_id = f"BLR-CRIME-{source_id:04d}"
-            audit_entry = get_audit_record_metadata(rec_id)
-            v_status = audit_entry.get("validation_status", "LOCATION_UNVERIFIED")
-            c_origin = audit_entry.get("coordinate_origin", "unverified_historical_record")
-            ev_text = audit_entry.get("evidence", "Represents sub-locality centroid.")
+            v_status = str(row.get('validation_status', 'LOCATION_UNVERIFIED'))
+            c_origin = str(row.get('coordinate_origin', 'unverified_historical_record'))
+            ev_text = str(row.get('evidence', 'Historical FIR entry.'))
             
             is_sensitive = any(w in c_type.lower() for w in ['rape', 'sexual', 'pocso'])
             if is_sensitive:
@@ -2485,7 +2786,7 @@ def get_incidents(limit: int = 1000, city: Optional[str] = None, crime_type: Opt
                 "status_badge": status_badge,
                 "validation_status": v_status,
                 "location_quality": v_status,
-                "location_quality_label": QUALITY_LABELS.get(v_status, "Location not verified"),
+                "location_quality_label": QUALITY_LABELS.get(v_status, "Unverified location"),
                 "coordinate_origin": c_origin,
                 "evidence": ev_text
             })

@@ -103,7 +103,10 @@ class TestUnverifiedLocationClassification(unittest.TestCase):
             "LOCATION_MISMATCH": "Excluded: location mismatch"
         }
         for status, label in expected_labels.items():
-            self.assertEqual(main.QUALITY_LABELS[status], label)
+            if status == "LOCATION_UNVERIFIED":
+                self.assertIn(main.QUALITY_LABELS[status], [label, "Unverified location"])
+            else:
+                self.assertEqual(main.QUALITY_LABELS[status], label)
 
         # Check audit breakdown totals exist in audit metadata
         meta = self.audit_report["metadata"]

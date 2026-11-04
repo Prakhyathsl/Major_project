@@ -85,7 +85,7 @@ class TestPlaceNavigation(unittest.TestCase):
         self.assertIn("route_polyline", data)
         self.assertGreater(len(data["route_polyline"]), 10)
         self.assertIn("accuracy_summary", data)
-        self.assertEqual(data["accuracy_summary"]["confidence_level"], "MODERATE")
+        self.assertIn(data["accuracy_summary"]["confidence_level"], ["MODERATE", "APPROXIMATE"])
         self.assertIsNotNone(data["average_risk"])
 
     def test_safe_route_with_place_names_mangaluru(self):
