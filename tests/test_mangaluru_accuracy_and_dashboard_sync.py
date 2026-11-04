@@ -176,5 +176,18 @@ class TestMangaluruAccuracyAndDashboardSync(unittest.TestCase):
             self.assertIn("police_station", inc)
             self.assertNotEqual(inc["police_station"], "")
 
+    def test_09_unified_loading_architecture_in_frontend(self):
+        """Verify unified loading functions and Combined View array concatenation in frontend."""
+        for path in ["frontend/index.html", "public/index.html"]:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            self.assertIn("async function fetchBengaluruRecords", content, f"{path} must define fetchBengaluruRecords")
+            self.assertIn("async function fetchMangaluruRecords", content, f"{path} must define fetchMangaluruRecords")
+            self.assertIn("async function loadCombinedIncidents", content, f"{path} must define loadCombinedIncidents")
+            self.assertIn("blr.concat(mlr)", content, f"{path} must concatenate both datasets in combined scope")
+            self.assertIn("Promise.all([", content, f"{path} must fetch concurrently via Promise.all in loadCombinedIncidents")
+            self.assertIn("selectedCity: 'combined'", content, f"{path} must initialize selectedCity to combined")
+
 if __name__ == "__main__":
     unittest.main()
