@@ -34,6 +34,12 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script>
+    if (typeof L.heatLayer === 'undefined') {
+      document.write('<script src="/leaflet-heat.js"><\/script>');
+    }
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -559,7 +565,9 @@
 
     html.light #btn-view-loc-on-map,
     html.light #btn-reset-route,
-    html.light #btn-swap-route {
+    html.light #btn-swap-route,
+    html.light #btn-clear-departure-time,
+    html.light .btn-time-preset {
       background-color: #f1f5f9 !important;
       border-color: #cbd5e1 !important;
       color: #1e293b !important;
@@ -567,7 +575,9 @@
 
     html.light #btn-view-loc-on-map:hover,
     html.light #btn-reset-route:hover,
-    html.light #btn-swap-route:hover {
+    html.light #btn-swap-route:hover,
+    html.light #btn-clear-departure-time:hover,
+    html.light .btn-time-preset:hover {
       background-color: #e2e8f0 !important;
       color: #0f172a !important;
     }
@@ -582,6 +592,46 @@
     html.light #route-map-legend .border-charcoal-800,
     html.light #route-map-legend .border-charcoal-800\/60 {
       border-color: #e2e8f0 !important;
+    }
+
+    /* Heatmap components in light mode */
+    html.light #btn-view-mode-classic,
+    html.light #btn-view-mode-heatmap {
+      border-color: #cbd5e1 !important;
+    }
+
+    html.light #btn-view-mode-classic.bg-beacon-500,
+    html.light #btn-view-mode-heatmap.bg-beacon-500 {
+      background-color: #f97316 !important;
+      color: #ffffff !important;
+    }
+
+    html.light #heatmap-left-panel,
+    html.light #heatmap-right-panel,
+    html.light #heatmap-legend {
+      background-color: rgba(255, 255, 255, 0.96) !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    html.light #heatmap-left-panel h4,
+    html.light #heatmap-right-panel h4,
+    html.light #heatmap-stat-total {
+      color: #0f172a !important;
+    }
+
+    html.light .hotspot-item {
+      background-color: #f8fafc !important;
+      border-color: #e2e8f0 !important;
+    }
+
+    html.light .hotspot-item:hover {
+      background-color: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    html.light .hotspot-item .font-bold.text-white {
+      color: #0f172a !important;
     }
 
     /* Scrollbars in light mode */
@@ -844,8 +894,7 @@
                     <div class="font-medium text-purpleCity-400 flex items-center gap-1.5">
                       <span class="w-1.5 h-1.5 rounded-full bg-purpleCity-400"></span> Police Jurisdictions
                     </div>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Emergency dispatch and police stations directory
-                      connected.</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Emergency contact directory and police station information.</p>
                   </div>
                   <div class="p-2 rounded bg-charcoal-800/80 border border-charcoal-700">
                     <div class="font-medium text-beacon-400 flex items-center gap-1.5">
@@ -886,8 +935,7 @@
               </div>
               <div class="text-3xl lg:text-4xl font-bold font-mono text-white tracking-tight" id="dash-total-incidents">
                 6,538</div>
-              <span id="dash-total-desc" class="text-[11px] text-slate-400 mt-1 block">Geographically verified in
-                primary Safety Map layers • BLR: 5,023 + MLR: 1,515</span>
+              <span id="dash-total-desc" class="text-[11px] text-slate-400 mt-1 block"></span>
             </div>
 
             <!-- Card 2: Bengaluru Eligible Incidents -->
@@ -900,8 +948,7 @@
               </div>
               <div class="text-3xl lg:text-4xl font-bold font-mono text-purpleCity-400 tracking-tight"
                 id="dash-blr-incidents">5,023</div>
-              <span id="dash-blr-desc" class="text-[11px] text-purpleCity-400/80 mt-1 block">Approximate locality
-                records (out of 9,859 raw registry)</span>
+              <span id="dash-blr-desc" class="text-[11px] text-purpleCity-400/80 mt-1 block"></span>
             </div>
 
             <!-- Card 3: Mangaluru Eligible Incidents -->
@@ -914,8 +961,7 @@
               </div>
               <div class="text-3xl lg:text-4xl font-bold font-mono text-beacon-400 tracking-tight"
                 id="dash-mlr-incidents">1,515</div>
-              <span id="dash-mlr-desc" class="text-[11px] text-beacon-400/80 mt-1 block">Approximate locality records
-                (out of 5,871 raw registry)</span>
+              <span id="dash-mlr-desc" class="text-[11px] text-beacon-400/80 mt-1 block"></span>
             </div>
 
           </div>
@@ -1306,16 +1352,41 @@
             <div
               class="p-3 bg-charcoal-950/85 backdrop-blur-md border-b border-charcoal-700/80 flex flex-wrap items-center justify-between gap-3 z-10 text-xs">
 
-              <!-- View Mode Controls (Map vs Satellite) -->
-              <div class="inline-flex rounded-lg bg-charcoal-900 border border-charcoal-700 p-0.5">
-                <button id="btn-map-layer-map"
-                  class="px-3 py-1.5 rounded-md font-medium text-white bg-beacon-500 shadow-sm transition-all">
-                  Map
-                </button>
-                <button id="btn-map-layer-sat"
-                  class="px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition-all">
-                  Satellite
-                </button>
+              <!-- View Mode Controls Group -->
+              <div class="flex items-center gap-2 flex-wrap">
+                <!-- Primary Safety Map Mode Selector (Classic View vs Heatmap View) -->
+                <div class="inline-flex rounded-lg bg-charcoal-900 border border-charcoal-700 p-0.5 shadow-sm" role="tablist" aria-label="Map View Mode">
+                  <button id="btn-view-mode-classic"
+                    class="px-3.5 py-1.5 rounded-md font-semibold text-white bg-beacon-500 shadow-sm transition-all flex items-center gap-1.5"
+                    title="Classic marker cluster view with incident points and popups">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+                    </svg>
+                    <span>Classic View</span>
+                  </button>
+                  <button id="btn-view-mode-heatmap"
+                    class="px-3.5 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition-all flex items-center gap-1.5"
+                    title="Police-style historical crime density heatmap">
+                    <svg class="w-3.5 h-3.5 text-beacon-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z" />
+                      <circle cx="12" cy="9" r="2.5" />
+                    </svg>
+                    <span>Heatmap View</span>
+                  </button>
+                </div>
+
+                <!-- Basemap Controls (Map vs Satellite) -->
+                <div class="inline-flex rounded-lg bg-charcoal-900 border border-charcoal-700 p-0.5">
+                  <button id="btn-map-layer-map"
+                    class="px-3 py-1.5 rounded-md font-medium text-white bg-beacon-500 shadow-sm transition-all">
+                    Map
+                  </button>
+                  <button id="btn-map-layer-sat"
+                    class="px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition-all">
+                    Satellite
+                  </button>
+                </div>
               </div>
 
               <!-- Layer Toggles -->
@@ -1337,6 +1408,16 @@
                     class="accent-beacon-500 w-3.5 h-3.5 rounded" />
                   <span>Mangaluru (MLR)</span>
                 </label>
+
+                <!-- Mobile Drawer Toggle Buttons for Heatmap Overlays (Only visible in Heatmap mode on mobile) -->
+                <div id="heatmap-mobile-toggles" class="hidden flex items-center gap-1.5 sm:hidden">
+                  <button id="btn-toggle-left-panel" class="px-2 py-1 rounded bg-charcoal-800 text-[11px] text-slate-300 border border-charcoal-700 hover:text-white">
+                    📊 Stats
+                  </button>
+                  <button id="btn-toggle-right-panel" class="px-2 py-1 rounded bg-charcoal-800 text-[11px] text-slate-300 border border-charcoal-700 hover:text-white">
+                    🔥 Hotspots
+                  </button>
+                </div>
               </div>
 
               <!-- Action Controls: Reset & Fullscreen -->
@@ -1362,6 +1443,113 @@
             <!-- Map Display Element -->
             <div class="relative w-full" style="height: 620px;">
               <div id="safety-map" class="w-full h-full"></div>
+
+              <!-- Heatmap Left Analytics Panel (Historical Crime Density) -->
+              <div id="heatmap-left-panel"
+                class="hidden absolute top-3 left-3 w-72 max-w-[calc(100%-24px)] bg-charcoal-950/90 backdrop-blur-md border border-charcoal-700/80 rounded-xl shadow-2xl z-[500] pointer-events-auto transition-all duration-200">
+                <div class="flex items-center justify-between p-3 border-b border-charcoal-700/70">
+                  <div class="flex items-center gap-2">
+                    <div
+                      class="w-6 h-6 rounded-md bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 6v6l4 2" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 class="text-xs font-bold text-white tracking-wide">Historical Crime Density</h4>
+                      <span class="text-[10px] text-slate-400 font-mono block">Kernel Density Surface</span>
+                    </div>
+                  </div>
+                  <button id="btn-collapse-left-panel"
+                    class="p-1 rounded text-slate-400 hover:text-white hover:bg-charcoal-800 transition-colors"
+                    title="Toggle density panel">
+                    <svg class="w-3.5 h-3.5 panel-chevron transition-transform duration-200" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2">
+                      <path d="m18 15-6-6-6 6" />
+                    </svg>
+                  </button>
+                </div>
+                <div id="heatmap-left-content" class="p-3 space-y-2.5 text-xs">
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-charcoal-900/80 border border-charcoal-800">
+                    <span class="text-slate-400 text-[11px]">Eligible Incidents</span>
+                    <span id="heatmap-stat-total" class="font-bold text-white font-mono text-sm">6,538</span>
+                  </div>
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-charcoal-900/80 border border-charcoal-800">
+                    <span class="text-slate-400 text-[11px]">Selected Scope</span>
+                    <span id="heatmap-stat-scope"
+                      class="font-semibold text-beacon-400 text-[11px] truncate max-w-[140px] text-right">Combined Scope</span>
+                  </div>
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-charcoal-900/80 border border-charcoal-800">
+                    <span class="text-slate-400 text-[11px]">Dominant Category</span>
+                    <span id="heatmap-stat-dominant"
+                      class="font-semibold text-purpleCity-300 text-[11px] truncate max-w-[140px] text-right">Ordinary Theft</span>
+                  </div>
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-charcoal-900/80 border border-charcoal-800">
+                    <span class="text-slate-400 text-[11px]">Historical Date Range</span>
+                    <span id="heatmap-stat-range" class="font-mono text-slate-300 text-[11px]">2015 — 2024</span>
+                  </div>
+                  <div class="text-[10px] text-slate-400/90 leading-relaxed pt-1 border-t border-charcoal-800/80 flex items-start gap-1.5">
+                    <span class="text-beacon-400 font-bold shrink-0">ℹ</span>
+                    <span>Area-level records (LOCALITY_MATCH_ONLY &amp; verified scenes). Unverified entries and police stations excluded.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Heatmap Right Hotspots Panel (Top 5 Hotspot Localities) -->
+              <div id="heatmap-right-panel"
+                class="hidden absolute top-3 right-3 w-80 max-w-[calc(100%-24px)] bg-charcoal-950/90 backdrop-blur-md border border-charcoal-700/80 rounded-xl shadow-2xl z-[500] pointer-events-auto transition-all duration-200">
+                <div class="flex items-center justify-between p-3 border-b border-charcoal-700/70">
+                  <div class="flex items-center gap-2">
+                    <div
+                      class="w-6 h-6 rounded-md bg-beacon-500/10 border border-beacon-500/30 flex items-center justify-center text-beacon-400">
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z" />
+                        <circle cx="12" cy="9" r="2.5" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 class="text-xs font-bold text-white tracking-wide">Top Hotspot Localities</h4>
+                      <span class="text-[10px] text-slate-400 font-mono block">Click locality to center map</span>
+                    </div>
+                  </div>
+                  <button id="btn-collapse-right-panel"
+                    class="p-1 rounded text-slate-400 hover:text-white hover:bg-charcoal-800 transition-colors"
+                    title="Toggle hotspots panel">
+                    <svg class="w-3.5 h-3.5 panel-chevron transition-transform duration-200" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2">
+                      <path d="m18 15-6-6-6 6" />
+                    </svg>
+                  </button>
+                </div>
+                <div id="heatmap-right-content" class="p-2 max-h-[460px] overflow-y-auto">
+                  <div id="heatmap-hotspots-list" class="space-y-1.5">
+                    <!-- Populated dynamically via renderHeatmapHotspots() -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Heatmap Legend -->
+              <div id="heatmap-legend"
+                class="hidden absolute bottom-3 right-3 bg-charcoal-950/90 backdrop-blur-md border border-charcoal-700/80 rounded-xl p-3 shadow-2xl z-[500] text-xs pointer-events-auto">
+                <div class="flex items-center justify-between gap-3 mb-1.5">
+                  <div class="flex items-center gap-1.5 font-bold text-white text-[11px] tracking-wide">
+                    <span class="w-2 h-2 rounded-full bg-beacon-500 animate-pulse"></span>
+                    <span>Historical Incident Density</span>
+                  </div>
+                </div>
+                <div class="h-2 rounded-full w-48 mb-1.5 shadow-inner"
+                  style="background: linear-gradient(to right, #0284c7 0%, #06b6d4 30%, #eab308 60%, #f97316 80%, #ef4444 100%);"></div>
+                <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                  <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#0284c7]"></span>Lower</span>
+                  <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#eab308]"></span>Moderate</span>
+                  <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>Elevated</span>
+                  <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#ef4444]"></span>Higher</span>
+                </div>
+                <div class="mt-2 pt-1 border-t border-charcoal-700/60 text-[9px] text-slate-500 text-center font-sans">
+                  Historical incident concentration &bull; Area-level data
+                </div>
+              </div>
 
               <!-- Mangaluru Sector Unavailable State Overlay (Displayed strictly when Mangaluru is isolated) -->
               <div id="mlr-unavailable-overlay"
@@ -1406,7 +1594,8 @@
                     id="strip-mismatch-count">910</strong></span>
               </div>
               <div class="flex items-center gap-3">
-                <span>Active Scope: <strong class="text-beacon-400" id="strip-active-city">Combined State Scope (Bengaluru & Mangaluru)</strong></span>
+                <span>Active Scope: <strong class="text-beacon-400" id="strip-active-city">Combined State Scope
+                    (Bengaluru & Mangaluru)</strong></span>
               </div>
             </div>
 
@@ -1641,6 +1830,61 @@
                 <input id="route-dst-lon" type="hidden" value="" />
               </div>
 
+              <!-- Departure Time (Optional) -->
+              <div class="relative p-3.5 rounded-xl bg-charcoal-900 border border-charcoal-800 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>Departure Time (Optional)</span>
+                  </span>
+                  <span
+                    class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"></span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <div class="relative flex-1">
+                    <input id="route-departure-time" type="time"
+                      class="w-full bg-charcoal-850 border border-charcoal-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 transition [color-scheme:dark]" />
+                  </div>
+                  <button id="btn-clear-departure-time" type="button"
+                    title="Clear departure time (evaluate all-day baseline)"
+                    class="px-2.5 py-2 rounded-lg bg-charcoal-800 hover:bg-charcoal-750 text-slate-400 hover:text-white text-xs border border-charcoal-700 transition flex items-center gap-1 active:scale-95">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    <span class="text-[11px]">Clear</span>
+                  </button>
+                </div>
+
+                <!-- Quick time presets -->
+                <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span class="text-[10px] text-slate-400 mr-0.5">Presets:</span>
+                  <button type="button"
+                    class="btn-time-preset px-2 py-0.5 rounded text-[10px] font-mono bg-charcoal-800 hover:bg-charcoal-750 text-slate-300 hover:text-white border border-charcoal-700 transition"
+                    data-time="now">Now</button>
+                  <button type="button"
+                    class="btn-time-preset px-2 py-0.5 rounded text-[10px] font-mono bg-charcoal-800 hover:bg-charcoal-750 text-slate-300 hover:text-white border border-charcoal-700 transition"
+                    data-time="08:00">8:00 AM</button>
+                  <button type="button"
+                    class="btn-time-preset px-2 py-0.5 rounded text-[10px] font-mono bg-charcoal-800 hover:bg-charcoal-750 text-slate-300 hover:text-white border border-charcoal-700 transition"
+                    data-time="14:00">2:00 PM</button>
+                  <button type="button"
+                    class="btn-time-preset px-2 py-0.5 rounded text-[10px] font-mono bg-charcoal-800 hover:bg-charcoal-750 text-slate-300 hover:text-white border border-charcoal-700 transition"
+                    data-time="20:00">8:00 PM</button>
+                  <button type="button"
+                    class="btn-time-preset px-2 py-0.5 rounded text-[10px] font-mono bg-charcoal-800 hover:bg-charcoal-750 text-slate-300 hover:text-white border border-charcoal-700 transition"
+                    data-time="23:00">11:00 PM</button>
+                </div>
+
+                <!-- Helper & Error container -->
+                <p id="route-departure-time-error" class="hidden text-[11px] text-rose-400 leading-tight pt-0.5"></p>
+              </div>
+
               <!-- Action Buttons -->
               <div class="flex items-center gap-2 pt-1">
                 <button id="btn-calculate-route" disabled
@@ -1783,9 +2027,14 @@
 
             <!-- 24-Hour Distribution Histogram -->
             <div class="lg:col-span-7 tactical-card p-5 rounded-2xl space-y-4">
-              <h3 class="text-sm font-semibold text-white uppercase tracking-wider flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-purpleCity-500"></span> 24-Hour Incident Distribution
-              </h3>
+              <div>
+                <h3 class="text-sm font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-purpleCity-500"></span> 24-Hour Incident Distribution
+                </h3>
+                <div id="hourly-chart-subtitle" class="text-[11px] text-slate-400 mt-1">
+                  Based on 7,302 timestamped Bengaluru records. Mangaluru incident timestamps are unavailable.
+                </div>
+              </div>
               <div class="h-64 relative">
                 <canvas id="chart-hourly-trend"></canvas>
               </div>
@@ -1804,20 +2053,19 @@
               </div>
               <div
                 class="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-charcoal-700/50">
-                <span>Historical records span: 2008 &mdash; 2020</span>
+                <span id="analytics-date-range">Historical records span: 2015 &mdash; 2024</span>
               </div>
             </div>
 
           </div>
         </section>
 
-        <!-- ==================== PAGE 5: POLICE COMMAND ==================== -->
+        <!-- ==================== PAGE 5: POLICE DIRECTORY & EMERGENCY HELPLINES ==================== -->
         <section id="page-police-command" class="page-view hidden space-y-6">
           <div class="flex items-center justify-between pb-4 border-b border-charcoal-700">
             <div>
-              <h2 class="text-xl font-bold text-white tracking-wide">Police Command &amp; Emergency Dispatch</h2>
-              <p class="text-xs text-slate-400 mt-1">Station directories, emergency hotlines, and quick dispatch
-                coordination.</p>
+              <h2 class="text-xl font-bold text-white tracking-wide">Police Directory &amp; Emergency Helplines</h2>
+              <p class="text-xs text-slate-400 mt-1">Public safety helplines, police station contact directories, and rapid one-touch calling.</p>
             </div>
           </div>
 
@@ -1902,6 +2150,7 @@
     // Global application state
     const AppState = {
       selectedCity: 'combined', // 'bengaluru' | 'mangaluru' | 'combined'
+      safetyMapViewMode: 'classic', // 'classic' | 'heatmap'
       mapTileMode: 'map', // 'map' | 'sat'
       showBlrMarkers: true,
       showMlrMarkers: true,
@@ -1928,6 +2177,7 @@
     let routeMap = null;
     let markersLayer = null;
     let heatLayer = null;
+    let activeHeatLayer = null;
     let routeLayer = null;
     let baseTiles = {};
     const incidentMarkersMap = {};
@@ -2177,12 +2427,22 @@
         maxZoom: 19
       });
 
+      // 3. Dark Basemap (CartoDB Dark Matter for Heatmap View)
+      baseTiles.dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>'
+      });
+
       // Graceful tile-loading error listeners
       baseTiles.map.on('tileerror', function () {
         console.warn('Road map basemap tile error');
       });
       baseTiles.sat.on('tileerror', function () {
         console.warn('Satellite basemap tile error');
+      });
+      baseTiles.dark.on('tileerror', function () {
+        console.warn('Dark basemap tile error');
       });
 
       // Default to Map (normal light road map)
@@ -2293,7 +2553,7 @@
       segmentIncidentMarkersLayer = L.layerGroup().addTo(routeMap);
     }
 
-    // Switch between Map (normal road map) and Satellite tile layers
+    // Switch between Map (normal road map / dark tactical) and Satellite tile layers
     function setMapLayer(mode) {
       AppState.mapTileMode = mode;
       const btnMap = document.getElementById('btn-map-layer-map') || document.getElementById('btn-map-layer-dark');
@@ -2303,9 +2563,12 @@
       if (!safetyMap) return;
 
       if (mode === 'sat') {
-        // Remove road map layer
+        // Remove road / dark map layers
         if (baseTiles.map && safetyMap.hasLayer(baseTiles.map)) {
           safetyMap.removeLayer(baseTiles.map);
+        }
+        if (baseTiles.dark && safetyMap.hasLayer(baseTiles.dark)) {
+          safetyMap.removeLayer(baseTiles.dark);
         }
         // Add satellite layers
         if (baseTiles.satLabels && !safetyMap.hasLayer(baseTiles.satLabels)) {
@@ -2332,10 +2595,25 @@
         if (baseTiles.sat && safetyMap.hasLayer(baseTiles.sat)) {
           safetyMap.removeLayer(baseTiles.sat);
         }
-        // Add road map layer
-        if (baseTiles.map && !safetyMap.hasLayer(baseTiles.map)) {
-          baseTiles.map.addTo(safetyMap);
-          baseTiles.map.bringToBack();
+        // Switch between dark (Heatmap view) and standard road map (Classic view)
+        if (AppState.safetyMapViewMode === 'heatmap') {
+          if (baseTiles.map && safetyMap.hasLayer(baseTiles.map)) {
+            safetyMap.removeLayer(baseTiles.map);
+          }
+          if (baseTiles.dark && !safetyMap.hasLayer(baseTiles.dark)) {
+            baseTiles.dark.addTo(safetyMap);
+            baseTiles.dark.bringToBack();
+          }
+          if (stripTile) stripTile.textContent = 'CartoDB Dark Matter (Tactical Heatmap)';
+        } else {
+          if (baseTiles.dark && safetyMap.hasLayer(baseTiles.dark)) {
+            safetyMap.removeLayer(baseTiles.dark);
+          }
+          if (baseTiles.map && !safetyMap.hasLayer(baseTiles.map)) {
+            baseTiles.map.addTo(safetyMap);
+            baseTiles.map.bringToBack();
+          }
+          if (stripTile) stripTile.textContent = 'Standard Road Map (OpenStreetMap)';
         }
         // Button highlight
         if (btnMap) {
@@ -2344,7 +2622,6 @@
         if (btnSat) {
           btnSat.className = 'px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition-all';
         }
-        if (stripTile) stripTile.textContent = 'Standard Road Map (OpenStreetMap)';
       }
     }
 
@@ -2452,7 +2729,7 @@
 
       // Check if both datasets are already cached and no filter is requested
       if (!crimeFilter && AppState.data.bengaluruIncidents && AppState.data.bengaluruIncidents.length === 5023 &&
-          AppState.data.mangaluruIncidents && AppState.data.mangaluruIncidents.length === 1515) {
+        AppState.data.mangaluruIncidents && AppState.data.mangaluruIncidents.length === 1515) {
         AppState.data.incidents = AppState.data.bengaluruIncidents.concat(AppState.data.mangaluruIncidents);
         renderSafetyMapMarkers();
         updateDynamicAuditCounters();
@@ -2585,6 +2862,11 @@
     function renderSafetyMapMarkers() {
       if (!safetyMap || !markersLayer) return;
 
+      if (AppState.safetyMapViewMode === 'heatmap') {
+        renderSafetyMapHeatmap();
+        return;
+      }
+
       markersLayer.clearLayers();
       if (heatLayer) heatLayer.clearLayers();
       for (const k in incidentMarkersMap) delete incidentMarkersMap[k];
@@ -2670,6 +2952,340 @@
       if (stripCount) stripCount.textContent = plottedCount.toLocaleString();
 
       updateVisibleMarkersCount();
+    }
+
+    // ==================== TWO VIEW MODES: HEATMAP VIEW & ANALYTICS ====================
+    function getEligibleIncidentsForMap() {
+      const city = AppState.selectedCity;
+      let incidents = [];
+      if (city === 'bengaluru') {
+        incidents = AppState.data.bengaluruIncidents || [];
+      } else if (city === 'mangaluru') {
+        incidents = AppState.data.mangaluruIncidents || [];
+      } else {
+        const blr = AppState.data.bengaluruIncidents || [];
+        const mlr = AppState.data.mangaluruIncidents || [];
+        incidents = blr.concat(mlr);
+      }
+
+      const eligible = [];
+      for (let i = 0; i < incidents.length; i++) {
+        const inc = incidents[i];
+        const lat = typeof inc.latitude === 'number' ? inc.latitude : parseFloat(inc.latitude);
+        const lon = typeof inc.longitude === 'number' ? inc.longitude : parseFloat(inc.longitude);
+        if (isNaN(lat) || isNaN(lon)) continue;
+
+        const isBlr = (inc.city || 'Bengaluru').toLowerCase() === 'bengaluru';
+
+        // City scope filtering
+        if (city === 'bengaluru' && !isBlr) continue;
+        if (city === 'mangaluru' && isBlr) continue;
+
+        // Checkbox layer filtering
+        if (isBlr && !AppState.showBlrMarkers) continue;
+        if (!isBlr && !AppState.showMlrMarkers) continue;
+
+        // Authoritative geographic audit status filtering
+        const vStatus = inc.validation_status || inc.location_quality || 'LOCATION_UNVERIFIED';
+
+        // Strict isolation: only LOCALITY_MATCH_ONLY approximate records in the Bengaluru incident layer
+        if (isBlr && vStatus !== 'LOCALITY_MATCH_ONLY') {
+          continue;
+        }
+
+        // Strict Mangaluru accuracy: only verified or locality match
+        if (!isBlr && vStatus !== 'LOCALITY_MATCH_ONLY' && vStatus !== 'INCIDENT_LOCATION_VERIFIED') {
+          continue;
+        }
+
+        if (AppState.activeCrimeFilter && AppState.activeCrimeFilter !== 'all') {
+          const cType = (inc.crime_type || inc.type || '').toLowerCase();
+          if (!cType.includes(AppState.activeCrimeFilter.toLowerCase())) {
+            continue;
+          }
+        }
+
+        eligible.push(inc);
+      }
+      return eligible;
+    }
+
+    function renderSafetyMapHeatmap() {
+      if (!safetyMap) return;
+
+      // 1. Hide classic marker layers
+      if (markersLayer) {
+        markersLayer.clearLayers();
+      }
+      if (heatLayer) heatLayer.clearLayers();
+      for (const k in incidentMarkersMap) delete incidentMarkersMap[k];
+      AppState.loadedIncidentIds.clear();
+
+      // 2. Remove existing active heatmap layer
+      if (activeHeatLayer && safetyMap.hasLayer(activeHeatLayer)) {
+        safetyMap.removeLayer(activeHeatLayer);
+        activeHeatLayer = null;
+      }
+
+      // 3. Show heatmap UI panels and legend
+      const leftPanel = document.getElementById('heatmap-left-panel');
+      const rightPanel = document.getElementById('heatmap-right-panel');
+      const legend = document.getElementById('heatmap-legend');
+      const mobileToggles = document.getElementById('heatmap-mobile-toggles');
+      if (leftPanel) leftPanel.classList.remove('hidden');
+      if (rightPanel) rightPanel.classList.remove('hidden');
+      if (legend) legend.classList.remove('hidden');
+      if (mobileToggles) mobileToggles.classList.remove('hidden');
+
+      // Ensure dark basemap is active when in normal map mode
+      if (AppState.mapTileMode !== 'sat') {
+        if (baseTiles.map && safetyMap.hasLayer(baseTiles.map)) {
+          safetyMap.removeLayer(baseTiles.map);
+        }
+        if (baseTiles.dark && !safetyMap.hasLayer(baseTiles.dark)) {
+          baseTiles.dark.addTo(safetyMap);
+          baseTiles.dark.bringToBack();
+        }
+        const btnMap = document.getElementById('btn-map-layer-map');
+        if (btnMap) btnMap.textContent = 'Dark Map';
+      }
+
+      // 4. Gather eligible incidents
+      const eligible = getEligibleIncidentsForMap();
+
+      // 5. Build heat coordinates [lat, lon, intensity]
+      const heatPoints = [];
+      for (let i = 0; i < eligible.length; i++) {
+        const inc = eligible[i];
+        const lat = typeof inc.latitude === 'number' ? inc.latitude : parseFloat(inc.latitude);
+        const lon = typeof inc.longitude === 'number' ? inc.longitude : parseFloat(inc.longitude);
+        if (!isNaN(lat) && !isNaN(lon)) {
+          heatPoints.push([lat, lon, 0.65]);
+        }
+      }
+
+      // 6. Create or mount Leaflet.heat layer
+      if (typeof L.heatLayer === 'function') {
+        activeHeatLayer = L.heatLayer(heatPoints, {
+          radius: 22,
+          blur: 18,
+          maxZoom: 17,
+          max: 1.0,
+          minOpacity: 0.35,
+          gradient: {
+            0.2: '#0284c7', // Sky Blue (low density)
+            0.4: '#06b6d4', // Cyan
+            0.6: '#eab308', // Yellow (moderate)
+            0.8: '#f97316', // Tactical Orange (high)
+            1.0: '#ef4444'  // Glowing Red (severe hotspot)
+          }
+        }).addTo(safetyMap);
+      } else {
+        console.warn('L.heatLayer not available, leaflet-heat.js may still be loading');
+      }
+
+      // 7. Update Left and Right analytics panels
+      updateHeatmapLeftPanel(eligible);
+      updateHeatmapRightPanel();
+
+      // 8. Update strip counters
+      const stripCount = document.getElementById('strip-plotted-count');
+      if (stripCount) stripCount.textContent = eligible.length.toLocaleString();
+      const stripVisible = document.getElementById('strip-visible-count');
+      if (stripVisible) stripVisible.textContent = eligible.length.toLocaleString();
+    }
+
+    function updateHeatmapLeftPanel(eligible) {
+      const totalEl = document.getElementById('heatmap-stat-total');
+      const scopeEl = document.getElementById('heatmap-stat-scope');
+      const dominantEl = document.getElementById('heatmap-stat-dominant');
+      const rangeEl = document.getElementById('heatmap-stat-range');
+
+      if (totalEl) totalEl.textContent = eligible.length.toLocaleString();
+
+      const city = AppState.selectedCity;
+      if (scopeEl) {
+        if (city === 'bengaluru') scopeEl.textContent = 'Bengaluru Urban';
+        else if (city === 'mangaluru') scopeEl.textContent = 'Mangaluru Sector';
+        else scopeEl.textContent = 'Combined Scope';
+      }
+
+      // Calculate dominant crime category & date span
+      const crimeCounts = {};
+      let minYear = 9999;
+      let maxYear = 0;
+
+      for (let i = 0; i < eligible.length; i++) {
+        const rec = eligible[i];
+        const cType = rec.crime_type || rec.type || 'Other';
+        crimeCounts[cType] = (crimeCounts[cType] || 0) + 1;
+
+        if (rec.date) {
+          const m = String(rec.date).match(/(?:19|20)\d{2}/);
+          if (m) {
+            const yr = parseInt(m[0], 10);
+            if (yr < minYear) minYear = yr;
+            if (yr > maxYear) maxYear = yr;
+          }
+        }
+      }
+
+      let topCategory = 'Theft / Property';
+      let topCount = 0;
+      for (const [cat, cnt] of Object.entries(crimeCounts)) {
+        if (cnt > topCount) {
+          topCount = cnt;
+          topCategory = cat;
+        }
+      }
+      if (dominantEl) {
+        dominantEl.textContent = topCategory;
+        dominantEl.title = `${topCategory} (${topCount.toLocaleString()} incidents)`;
+      }
+
+      if (rangeEl) {
+        if (minYear <= maxYear && minYear !== 9999) {
+          rangeEl.textContent = `${minYear} — ${maxYear}`;
+        } else {
+          rangeEl.textContent = '2015 — 2024';
+        }
+      }
+    }
+
+    async function updateHeatmapRightPanel() {
+      const scope = AppState.selectedCity || 'combined';
+      try {
+        const res = await fetch(`${API_BASE}/high-risk-zones?limit=5&city=${scope}`);
+        if (res.ok) {
+          const data = await res.json();
+          renderHeatmapHotspots(data.zones || []);
+        } else if (AppState.data.dashboard && AppState.data.dashboard.top_risky_areas) {
+          renderHeatmapHotspots(AppState.data.dashboard.top_risky_areas.slice(0, 5));
+        }
+      } catch (err) {
+        console.warn('Error loading heatmap hotspots:', err);
+      }
+    }
+
+    function renderHeatmapHotspots(zones) {
+      const listEl = document.getElementById('heatmap-hotspots-list');
+      if (!listEl) return;
+
+      if (!zones || zones.length === 0) {
+        listEl.innerHTML = '<div class="text-[11px] text-slate-400 p-2 text-center">No hotspot localities available for current selection.</div>';
+        return;
+      }
+
+      let html = '';
+      zones.slice(0, 5).forEach((z, idx) => {
+        const rank = idx + 1;
+        const name = z.locality || z.name || 'Unknown Locality';
+        const count = (z.incident_count ?? z.incidents ?? 0).toLocaleString();
+        const score = z.risk_score ?? z.score ?? 50;
+        const riskColor = getRiskColor(score);
+        const riskLabel = getRiskLevelLabel(score);
+        const lat = z.latitude;
+        const lon = z.longitude;
+
+        html += `
+          <div class="hotspot-item flex items-center justify-between p-2 rounded-lg bg-charcoal-900/90 border border-charcoal-800 hover:border-beacon-500/50 hover:bg-charcoal-850 cursor-pointer transition-all duration-150"
+            data-lat="${lat || ''}" data-lon="${lon || ''}" data-name="${escapeHtml(name)}"
+            title="Click to fly to ${escapeHtml(name)}">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <span class="w-5 h-5 rounded-full flex items-center justify-center font-mono font-bold text-[10px] shrink-0 ${rank === 1 ? 'bg-red-500/20 text-red-400 border border-red-500/40' : rank <= 3 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'bg-slate-700 text-slate-300'}">
+                #${rank}
+              </span>
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-white truncate max-w-[130px]">${escapeHtml(name)}</div>
+                <div class="text-[10px] text-slate-400 font-mono">${count} incidents</div>
+              </div>
+            </div>
+            <div class="flex flex-col items-end shrink-0 pl-1">
+              <span class="font-mono font-bold text-xs" style="color: ${riskColor};">${score}</span>
+              <span class="text-[9px] font-semibold tracking-wider uppercase text-slate-400">${riskLabel}</span>
+            </div>
+          </div>
+        `;
+      });
+
+      listEl.innerHTML = html;
+
+      // Attach click listeners for smooth map centering
+      listEl.querySelectorAll('.hotspot-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const lat = parseFloat(item.dataset.lat);
+          const lon = parseFloat(item.dataset.lon);
+          const name = item.dataset.name;
+          if (!isNaN(lat) && !isNaN(lon) && safetyMap) {
+            safetyMap.flyTo([lat, lon], 14, { duration: 1.2 });
+            showToast(`Focused on hotspot: ${name}`, 'info');
+          }
+        });
+      });
+    }
+
+    function switchSafetyMapViewMode(mode) {
+      if (AppState.safetyMapViewMode === mode) return;
+      AppState.safetyMapViewMode = mode;
+
+      const btnClassic = document.getElementById('btn-view-mode-classic');
+      const btnHeatmap = document.getElementById('btn-view-mode-heatmap');
+      const leftPanel = document.getElementById('heatmap-left-panel');
+      const rightPanel = document.getElementById('heatmap-right-panel');
+      const legend = document.getElementById('heatmap-legend');
+      const mobileToggles = document.getElementById('heatmap-mobile-toggles');
+      const btnMap = document.getElementById('btn-map-layer-map');
+
+      if (mode === 'heatmap') {
+        // Highlight Heatmap button
+        if (btnHeatmap) {
+          btnHeatmap.className = 'px-3.5 py-1.5 rounded-md font-semibold text-white bg-beacon-500 shadow-sm transition-all flex items-center gap-1.5';
+        }
+        if (btnClassic) {
+          btnClassic.className = 'px-3.5 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition-all flex items-center gap-1.5';
+        }
+        if (btnMap) btnMap.textContent = 'Dark Map';
+
+        // Render Heatmap View
+        renderSafetyMapHeatmap();
+        showToast('Switched to Crime Density Heatmap view', 'info');
+      } else {
+        // Highlight Classic button
+        if (btnClassic) {
+          btnClassic.className = 'px-3.5 py-1.5 rounded-md font-semibold text-white bg-beacon-500 shadow-sm transition-all flex items-center gap-1.5';
+        }
+        if (btnHeatmap) {
+          btnHeatmap.className = 'px-3.5 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition-all flex items-center gap-1.5';
+        }
+        if (btnMap) btnMap.textContent = 'Map';
+
+        // Hide heatmap UI panels & legend
+        if (leftPanel) leftPanel.classList.add('hidden');
+        if (rightPanel) rightPanel.classList.add('hidden');
+        if (legend) legend.classList.add('hidden');
+        if (mobileToggles) mobileToggles.classList.add('hidden');
+
+        // Remove active heatmap layer
+        if (activeHeatLayer && safetyMap.hasLayer(activeHeatLayer)) {
+          safetyMap.removeLayer(activeHeatLayer);
+          activeHeatLayer = null;
+        }
+
+        // Restore standard road map tiles if not in satellite mode
+        if (AppState.mapTileMode !== 'sat') {
+          if (baseTiles.dark && safetyMap.hasLayer(baseTiles.dark)) {
+            safetyMap.removeLayer(baseTiles.dark);
+          }
+          if (baseTiles.map && !safetyMap.hasLayer(baseTiles.map)) {
+            baseTiles.map.addTo(safetyMap);
+            baseTiles.map.bringToBack();
+          }
+        }
+
+        // Render classic clustered markers
+        renderSafetyMapMarkers();
+        showToast('Switched to Classic Incident Markers view', 'info');
+      }
     }
 
     // ==================== DASHBOARD HIGH-RISK ZONES & LOCATION INTELLIGENCE ====================
@@ -3385,7 +4001,7 @@
     }
 
     // ==================== PAGE NAVIGATION CONTROLLER ====================
-    function switchNavPage(pageId) {
+    window.switchNavPage = function switchNavPage(pageId) {
       document.querySelectorAll('.page-view').forEach(p => p.classList.add('hidden'));
       const target = document.getElementById(pageId);
       if (target) target.classList.remove('hidden');
@@ -3563,12 +4179,19 @@
         return false;
       }
 
-      // If coordinates already present and not empty
+      // Check if coordinates already present and strictly match the current input text
       const curLat = parseFloat(latInput.value);
       const curLon = parseFloat(lonInput.value);
-      if (!isNaN(curLat) && !isNaN(curLon) && latInput.value !== '' && lonInput.value !== '') {
+      const matched = latInput.dataset.matchedText || '';
+      if (!isNaN(curLat) && !isNaN(curLon) && latInput.value !== '' && lonInput.value !== '' && matched.toLowerCase() === text.toLowerCase()) {
         return true;
       }
+
+      // If text has changed from stored coordinate match, invalidate stale coordinates
+      latInput.value = '';
+      lonInput.value = '';
+      delete latInput.dataset.matchedText;
+      if (badge) badge.classList.add('hidden');
 
       // Query geocoder
       if (spinner) spinner.classList.remove('hidden');
@@ -3611,6 +4234,97 @@
       }
     }
 
+    function clearActiveRouteDisplay(reason) {
+      AppState.activeRouteGeneration = (AppState.activeRouteGeneration || 0) + 1;
+      if (window.currentRouteAbortController) {
+        try { window.currentRouteAbortController.abort(); } catch (e) { }
+        window.currentRouteAbortController = null;
+      }
+
+      if (routeLayer) {
+        routeLayer.clearLayers();
+      }
+      if (segmentIncidentMarkersLayer) {
+        segmentIncidentMarkersLayer.clearLayers();
+      }
+      if (routeMap) {
+        routeMap.closePopup();
+      }
+      closeSegmentIncidentDetails();
+
+      const panel = document.getElementById('route-details-panel');
+      if (panel) {
+        panel.classList.add('hidden');
+        panel.innerHTML = '';
+      }
+
+      const badge = document.getElementById('route-distance-badge');
+      if (badge) {
+        badge.textContent = reason || 'Ready for Calculation';
+      }
+
+      window.currentRouteSegments = null;
+      window.currentRouteOrigin = null;
+      window.currentRouteDestination = null;
+      window.currentRouteSegmentPolylines = {};
+    }
+
+    function formatTime12Hour(time24Str) {
+      if (!time24Str || !time24Str.trim()) return '';
+      const parts = time24Str.trim().split(':');
+      if (parts.length < 2) return time24Str.trim();
+      let h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      if (isNaN(h) || isNaN(m)) return time24Str.trim();
+      const mer = h >= 12 ? 'PM' : 'AM';
+      let h12 = h % 12;
+      if (h12 === 0) h12 = 12;
+      return `${h12}:${m < 10 ? '0' + m : m} ${mer}`;
+    }
+
+    function initRouteDepartureTime() {
+      const timeInput = document.getElementById('route-departure-time');
+      const clearBtn = document.getElementById('btn-clear-departure-time');
+      const errEl = document.getElementById('route-departure-time-error');
+
+      if (!timeInput) return;
+
+      timeInput.addEventListener('input', () => {
+        if (errEl) errEl.classList.add('hidden');
+        clearActiveRouteDisplay('Departure time changed — Ready for Calculation');
+      });
+
+      timeInput.addEventListener('change', () => {
+        if (errEl) errEl.classList.add('hidden');
+        clearActiveRouteDisplay('Departure time changed — Ready for Calculation');
+      });
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          timeInput.value = '';
+          if (errEl) errEl.classList.add('hidden');
+          clearActiveRouteDisplay('Departure time cleared — Ready for Calculation');
+          showToast('Departure time cleared', 'info');
+        });
+      }
+
+      document.querySelectorAll('.btn-time-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tVal = btn.dataset.time;
+          if (tVal === 'now') {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            timeInput.value = `${h}:${m}`;
+          } else {
+            timeInput.value = tVal;
+          }
+          if (errEl) errEl.classList.add('hidden');
+          clearActiveRouteDisplay('Departure time changed — Ready for Calculation');
+        });
+      });
+    }
+
     function initRoutePlaceSearch() {
       ['src', 'dst'].forEach(type => {
         const input = document.getElementById(`route-${type}-place`);
@@ -3625,6 +4339,18 @@
 
         input.addEventListener('input', (e) => {
           const query = e.target.value.trim();
+
+          // Immediately clear previous route when endpoints are being edited
+          clearActiveRouteDisplay('Endpoints modified — Ready for Calculation');
+
+          // Invalidate coordinates if user changed text from previously matched selection
+          if (latInput.dataset.matchedText && latInput.dataset.matchedText.toLowerCase() !== query.toLowerCase()) {
+            latInput.value = '';
+            lonInput.value = '';
+            delete latInput.dataset.matchedText;
+            if (badge) badge.classList.add('hidden');
+          }
+
           if (errorP) errorP.classList.add('hidden');
           document.getElementById('route-global-error')?.classList.add('hidden');
           updateRouteCalculateBtnState();
@@ -3727,6 +4453,9 @@
       const btnSwap = document.getElementById('btn-swap-route');
       if (btnSwap) {
         btnSwap.addEventListener('click', () => {
+          // Immediately clear any active route display on swap
+          clearActiveRouteDisplay('Endpoints swapped — Ready for Calculation');
+
           const srcInput = document.getElementById('route-src-place');
           const dstInput = document.getElementById('route-dst-place');
           const srcLatInput = document.getElementById('route-src-lat');
@@ -3770,12 +4499,15 @@
       const btnReset = document.getElementById('btn-reset-route');
       if (btnReset) {
         btnReset.addEventListener('click', () => {
+          clearActiveRouteDisplay('Ready for Calculation');
+
           const srcInput = document.getElementById('route-src-place');
           const dstInput = document.getElementById('route-dst-place');
           const srcLatInput = document.getElementById('route-src-lat');
           const srcLonInput = document.getElementById('route-src-lon');
           const dstLatInput = document.getElementById('route-dst-lat');
           const dstLonInput = document.getElementById('route-dst-lon');
+          const timeInput = document.getElementById('route-departure-time');
           const panel = document.getElementById('route-details-panel');
           const badge = document.getElementById('route-distance-badge');
 
@@ -3785,6 +4517,9 @@
           if (srcLonInput) srcLonInput.value = '';
           if (dstLatInput) { dstLatInput.value = ''; delete dstLatInput.dataset.matchedText; }
           if (dstLonInput) dstLonInput.value = '';
+          if (timeInput) timeInput.value = '';
+          document.getElementById('route-departure-time-error')?.classList.add('hidden');
+
           clearTimeout(routeSearchTimeout);
           document.querySelectorAll('#route-src-suggestions, #route-dst-suggestions').forEach(el => el.classList.add('hidden'));
 
@@ -3866,6 +4601,20 @@
         return;
       }
 
+      // Abort any in-flight route fetch and advance generation token
+      if (window.currentRouteAbortController) {
+        try { window.currentRouteAbortController.abort(); } catch (e) { }
+      }
+      window.currentRouteAbortController = new AbortController();
+      const thisGen = ++AppState.activeRouteGeneration;
+
+      // Extract optional departure time formatted in 12-hour AM/PM
+      const timeInput = document.getElementById('route-departure-time');
+      let depTimePayload = null;
+      if (timeInput && timeInput.value.trim()) {
+        depTimePayload = formatTime12Hour(timeInput.value.trim());
+      }
+
       const btn = document.getElementById('btn-calculate-route');
       btn.disabled = true;
       btn.innerHTML = `
@@ -3877,13 +4626,15 @@
         const res = await fetch(`${API_BASE}/safe-route`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: window.currentRouteAbortController.signal,
           body: JSON.stringify({
             src_lat: srcLat,
             src_lon: srcLon,
             dst_lat: dstLat,
             dst_lon: dstLon,
             origin_name: srcPlace,
-            destination_name: dstPlace
+            destination_name: dstPlace,
+            departure_time: depTimePayload
           })
         });
 
@@ -3892,6 +4643,12 @@
           throw new Error(errData.detail || 'Safe route API error');
         }
         const data = await res.json();
+
+        // Check if this response is stale
+        if (thisGen !== AppState.activeRouteGeneration) {
+          console.warn('Discarding stale safe route calculation generation:', thisGen);
+          return;
+        }
 
         // Clear previous layers, popups, and incident panels
         initRouteMap();
@@ -4033,7 +4790,8 @@
         const panel = document.getElementById('route-details-panel');
         panel.classList.remove('hidden');
 
-        const segSummary = data.segment_summary;
+        const isTimeSelected = !!(data.temporal_analysis && data.temporal_analysis.departure_time);
+        const tempStatus = data.temporal_analysis ? data.temporal_analysis.status : null;
 
         panel.innerHTML = `
           <div class="p-3.5 rounded-xl bg-charcoal-900 border border-charcoal-800 space-y-3">
@@ -4046,116 +4804,46 @@
               <span class="font-bold text-white truncate max-w-[130px] sm:max-w-[160px]">${escapeHtml(destLabel)}</span>
             </div>
 
-            <div class="flex items-center justify-between pb-2 border-b border-charcoal-700">
-              <div>
-                <span class="text-xs text-slate-400 block">Average Corridor Threat</span>
-                <span class="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Heuristic Historical Indicator</span>
+            <!-- Departure Time (only if selected) -->
+            ${isTimeSelected ? `
+              <div class="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg bg-charcoal-850 border border-charcoal-750">
+                <span class="text-slate-400 text-[11px]">Departure Time</span>
+                <span class="font-bold text-white font-mono text-[11px]">${escapeHtml(data.temporal_analysis.departure_time)} IST</span>
               </div>
+            ` : ''}
+
+            <!-- Historical Threat Score -->
+            <div class="flex items-center justify-between py-2 border-y border-charcoal-750">
+              <span class="text-xs text-slate-300 font-medium">Historical Threat Score</span>
               <span class="text-lg font-bold font-mono" style="color:${isMeasured ? getCorridorRiskColor(avgRisk, true) : '#94a3b8'}">
                 ${isMeasured ? `${avgRisk}/100` : 'Unmeasured'}
               </span>
             </div>
 
+            <!-- Total Distance & Estimated Travel Time -->
             <div class="grid grid-cols-2 gap-2 text-xs">
-              <div class="p-2 rounded bg-charcoal-850">
-                <span class="text-[10px] text-slate-400">Total Distance</span>
-                <div class="font-bold text-white font-mono">${data.distance_km} km</div>
+              <div class="p-2 rounded bg-charcoal-850 border border-charcoal-750/50">
+                <span class="text-[10px] text-slate-400 block mb-0.5">Total Distance</span>
+                <div class="font-bold text-white font-mono text-sm">${data.distance_km} km</div>
               </div>
-              <div class="p-2 rounded bg-charcoal-850">
-                <span class="text-[10px] text-slate-400">Est. Transit</span>
-                <div class="font-bold text-white font-mono">${data.estimated_time_min} mins</div>
+              <div class="p-2 rounded bg-charcoal-850 border border-charcoal-750/50">
+                <span class="text-[10px] text-slate-400 block mb-0.5">Estimated Travel Time</span>
+                <div class="font-bold text-white font-mono text-sm">${data.estimated_time_min} mins</div>
               </div>
             </div>
 
-            ${segSummary ? `
-              <!-- Route Segment Risk Coverage -->
-              <div class="p-2.5 rounded-lg bg-charcoal-850 border border-charcoal-750 space-y-2">
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-300">Route Segment Risk Coverage</span>
-                  <span class="text-[10px] font-mono text-slate-400">${segSummary.total_segments} contiguous segments (${segSummary.total_distance_km} km)</span>
+            <!-- Single Short Temporal Line (only if departure time selected) -->
+            ${isTimeSelected ? (
+            tempStatus === 'AVAILABLE' ? `
+                <div id="route-temporal-line" class="text-xs text-cyan-300 px-2.5 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center gap-1.5">
+                  <span>Historical time pattern: ${data.temporal_analysis.incidents_in_time_window} of ${data.temporal_analysis.total_corridor_incidents} corridor incidents</span>
                 </div>
-
-                <!-- Proportional Segment Bar -->
-                <div class="w-full h-2 rounded-full overflow-hidden flex bg-charcoal-750">
-                  ${segments.map(s => `
-                    <div style="flex:${s.length_km}; background-color:${s.color}; cursor:pointer;" onclick="openSegmentIncidentDetailsById(${s.segment_id})" title="Segment #${s.segment_id}: ${s.category} (${s.length_km.toFixed(2)} km) &bull; Click to view Historical Incident Details"></div>
-                  `).join('')}
+              ` : tempStatus === 'UNAVAILABLE' ? `
+                <div id="route-temporal-line" class="text-xs text-amber-300 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-1.5">
+                  <span>Historical time data unavailable for this corridor.</span>
                 </div>
-
-                <!-- Measured vs Unmeasured Breakdown -->
-                <div class="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
-                  <span class="flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <span>Measured: <strong class="text-white font-mono">${segSummary.measured_percent}%</strong> (${segSummary.measured_distance_km} km)</span>
-                  </span>
-                  <span class="flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
-                    <span>Unmeasured: <strong class="text-white font-mono">${segSummary.unmeasured_percent}%</strong> (${segSummary.unmeasured_distance_km} km)</span>
-                  </span>
-                </div>
-
-                <!-- Category Chips -->
-                <div class="flex flex-wrap gap-1.5 pt-1 border-t border-charcoal-800">
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    Lower: ${segSummary.categories['Lower Historical Threat'] || 0}
-                  </span>
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
-                    Moderate: ${segSummary.categories['Moderate Historical Threat'] || 0}
-                  </span>
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-orange-500/15 text-orange-400 border border-orange-500/30">
-                    Elevated: ${segSummary.categories['Elevated Historical Threat'] || 0}
-                  </span>
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-red-500/15 text-red-400 border border-red-500/30">
-                    Higher: ${segSummary.categories['Higher Historical Threat'] || 0}
-                  </span>
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-500/15 text-slate-400 border border-slate-500/30">
-                    Unmeasured: ${segSummary.categories['Insufficient Evidence'] || 0}
-                  </span>
-                </div>
-              </div>
-            ` : ''}
-
-            ${data.accuracy_summary ? `
-              <div class="p-2.5 rounded-lg bg-charcoal-850 border border-charcoal-750 space-y-2 mt-2">
-                <div class="flex items-center justify-between pb-1.5 border-b border-charcoal-700/60">
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-[10px] font-semibold tracking-wide uppercase text-slate-300">Geospatial Audit & Confidence</span>
-                    ${data.accuracy_summary.usable_evidence_ratio !== undefined ? `<span class="text-[9px] text-slate-400 font-mono">(${data.accuracy_summary.usable_evidence_ratio}% evidence)</span>` : ''}
-                  </div>
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono ${data.accuracy_summary.confidence_level === 'HIGH' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-              data.accuracy_summary.confidence_level === 'MODERATE' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                data.accuracy_summary.confidence_level === 'APPROXIMATE' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                  'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-            }">${(data.accuracy_summary.confidence_level || 'APPROXIMATE').replace('_', ' ')}</span>
-                </div>
-                <div class="grid grid-cols-2 gap-1.5 text-[10px]">
-                  <div class="flex items-center justify-between p-1.5 rounded bg-charcoal-900 border border-charcoal-800">
-                    <span class="text-slate-400">Verified Nearby:</span>
-                    <span class="font-bold text-emerald-400 font-mono">${data.accuracy_summary.verified_nearby}</span>
-                  </div>
-                  <div class="flex items-center justify-between p-1.5 rounded bg-charcoal-900 border border-charcoal-800">
-                    <span class="text-slate-400">Locality Centroids:</span>
-                    <span class="font-bold text-cyan-400 font-mono">${data.accuracy_summary.locality_centroids_nearby}</span>
-                  </div>
-                  <div class="flex items-center justify-between p-1.5 rounded bg-charcoal-900 border border-charcoal-800">
-                    <span class="text-slate-400">Station Coordinates:</span>
-                    <span class="font-bold text-indigo-400 font-mono">${data.accuracy_summary.police_station_coords_nearby}</span>
-                  </div>
-                  <div class="flex items-center justify-between p-1.5 rounded bg-charcoal-900 border border-charcoal-800">
-                    <span class="text-slate-400">Approx / Unverified:</span>
-                    <span class="font-bold text-amber-400 font-mono">${data.accuracy_summary.unverified_locations_nearby}</span>
-                  </div>
-                </div>
-                ${data.accuracy_summary.mismatches_excluded > 0 ? `
-                  <div class="text-[10px] text-rose-300 bg-rose-500/10 p-1.5 rounded border border-rose-500/20">
-                    Excluded ${data.accuracy_summary.mismatches_excluded} out-of-region geocoding mismatch(es) from risk calculation.
-                  </div>
-                ` : ''}
-                <div class="text-[10px] text-slate-400 leading-tight italic pt-0.5">
-                  ${data.accuracy_summary.advisory || 'Corridor safety weighted by audited geographic resolution tiers.'}
-                </div>
-              </div>
-            ` : ''}
+              ` : ''
+          ) : ''}
           </div>
         `;
 
@@ -4898,6 +5586,12 @@
         const ctxHourly = document.getElementById('chart-hourly-trend').getContext('2d');
         const hours = Array.from({ length: 24 }, (_, i) => i);
         const counts = hours.map(h => trends.hourly_distribution[h] || 0);
+        const totalTimestamped = trends.total_timestamped !== undefined ? trends.total_timestamped : counts.reduce((a, b) => a + b, 0);
+
+        const subEl = document.getElementById('hourly-chart-subtitle');
+        if (subEl) {
+          subEl.textContent = `Based on ${totalTimestamped.toLocaleString()} timestamped Bengaluru records. Mangaluru incident timestamps are unavailable.`;
+        }
 
         ChartInstances.hourly = new Chart(ctxHourly, {
           type: 'bar',
@@ -4930,18 +5624,27 @@
         });
       }
 
-      // 3. Monthly Trend Line
-      if (trends && trends.monthly_trends) {
+      // 3. Longitudinal Trend Line
+      if (trends && (trends.yearly_trends || trends.monthly_trends)) {
+        const trendList = trends.yearly_trends || trends.monthly_trends;
         if (ChartInstances.monthly) ChartInstances.monthly.destroy();
         const ctxMonthly = document.getElementById('chart-monthly-trend').getContext('2d');
+
+        // Dynamic date range
+        if (trends.date_range && trends.date_range.start && trends.date_range.end) {
+          const rangeEl = document.getElementById('analytics-date-range');
+          if (rangeEl) {
+            rangeEl.innerHTML = `Historical records span: ${trends.date_range.start} &mdash; ${trends.date_range.end}`;
+          }
+        }
 
         ChartInstances.monthly = new Chart(ctxMonthly, {
           type: 'line',
           data: {
-            labels: trends.monthly_trends.map(t => t.date),
+            labels: trendList.map(t => t.date),
             datasets: [{
               label: 'Historical Crimes Recorded',
-              data: trends.monthly_trends.map(t => t.count),
+              data: trendList.map(t => t.count),
               borderColor: '#f97316',
               backgroundColor: 'rgba(249, 115, 22, 0.08)',
               fill: true,
@@ -5039,8 +5742,9 @@
           document.getElementById('risk-input-lon').value = lon.toFixed(4);
         });
 
-        // Place Search Initialization
+        // Place Search & Departure Time Initialization
         initRoutePlaceSearch();
+        initRouteDepartureTime();
         updateRouteCalculateBtnState();
 
         // Update Summary Cards
@@ -5223,6 +5927,61 @@
           container.requestFullscreen().catch(() => { });
         } else {
           document.exitFullscreen().catch(() => { });
+        }
+      });
+
+      // Safety Map View Mode Selector (Classic View vs Heatmap View)
+      const btnViewClassic = document.getElementById('btn-view-mode-classic');
+      const btnViewHeatmap = document.getElementById('btn-view-mode-heatmap');
+      if (btnViewClassic) btnViewClassic.addEventListener('click', () => switchSafetyMapViewMode('classic'));
+      if (btnViewHeatmap) btnViewHeatmap.addEventListener('click', () => switchSafetyMapViewMode('heatmap'));
+
+      // Heatmap Left & Right Panel Collapses
+      const btnCollapseLeft = document.getElementById('btn-collapse-left-panel');
+      const contentLeft = document.getElementById('heatmap-left-content');
+      if (btnCollapseLeft && contentLeft) {
+        btnCollapseLeft.addEventListener('click', (e) => {
+          e.stopPropagation();
+          contentLeft.classList.toggle('hidden');
+          const chevron = btnCollapseLeft.querySelector('.panel-chevron');
+          if (chevron) chevron.classList.toggle('rotate-180');
+        });
+      }
+
+      const btnCollapseRight = document.getElementById('btn-collapse-right-panel');
+      const contentRight = document.getElementById('heatmap-right-content');
+      if (btnCollapseRight && contentRight) {
+        btnCollapseRight.addEventListener('click', (e) => {
+          e.stopPropagation();
+          contentRight.classList.toggle('hidden');
+          const chevron = btnCollapseRight.querySelector('.panel-chevron');
+          if (chevron) chevron.classList.toggle('rotate-180');
+        });
+      }
+
+      // Mobile drawer toggle buttons for heatmap overlays
+      const btnToggleLeft = document.getElementById('btn-toggle-left-panel');
+      const panelLeft = document.getElementById('heatmap-left-panel');
+      if (btnToggleLeft && panelLeft) {
+        btnToggleLeft.addEventListener('click', () => {
+          panelLeft.classList.toggle('hidden');
+        });
+      }
+
+      const btnToggleRight = document.getElementById('btn-toggle-right-panel');
+      const panelRight = document.getElementById('heatmap-right-panel');
+      if (btnToggleRight && panelRight) {
+        btnToggleRight.addEventListener('click', () => {
+          panelRight.classList.toggle('hidden');
+        });
+      }
+
+      // Prevent Leaflet map click/scroll propagation through overlay panels
+      const heatmapLegend = document.getElementById('heatmap-legend');
+      [panelLeft, panelRight, heatmapLegend].forEach(el => {
+        if (el && window.L && L.DomEvent) {
+          L.DomEvent.disableClickPropagation(el);
+          L.DomEvent.disableScrollPropagation(el);
         }
       });
 

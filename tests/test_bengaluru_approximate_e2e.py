@@ -32,17 +32,17 @@ async def run_e2e():
         }""", timeout=30000)
         print("Verified strip-plotted-count displays 5,023.")
 
-        # Check the other strip counters
+        # Check the audit strip counters
         unverified_txt = await page.locator('#strip-unverified-count').text_content()
-        station_txt = await page.locator('#strip-station-count').text_content()
         mismatch_txt = await page.locator('#strip-mismatch-count').text_content()
-        total_txt = await page.locator('#strip-total-records').text_content()
+        blr_approx_txt = await page.locator('#strip-blr-approx').text_content()
+        plotted_txt = await page.locator('#strip-plotted-count').text_content()
 
-        print(f"Audit Strip: Approx Plotted=5,023 | Unverified={unverified_txt} | Station={station_txt} | Mismatch={mismatch_txt} | Total={total_txt}")
+        print(f"Audit Strip: Approx Plotted={plotted_txt} | Unverified={unverified_txt} | Mismatch={mismatch_txt} | BLR Approx={blr_approx_txt}")
         assert "2,925" in unverified_txt, f"Expected 2,925 unverified excluded, got {unverified_txt}"
-        assert "1,001" in station_txt, f"Expected 1,001 station references, got {station_txt}"
         assert "910" in mismatch_txt, f"Expected 910 mismatch, got {mismatch_txt}"
-        assert "9,859" in total_txt, f"Expected 9,859 total records, got {total_txt}"
+        assert "5,023" in blr_approx_txt, f"Expected 5,023 BLR approx, got {blr_approx_txt}"
+        assert await page.locator('#strip-station-count').count() == 0, "Police station references must be isolated from main audit strip"
 
         # 3. Verify Leaflet markers and cluster count
         cluster_count = await page.evaluate("() => markersLayer.getLayers().length")
@@ -64,36 +64,16 @@ async def run_e2e():
         await page.screenshot(path="C:/Users/Prakhyath S.L/.gemini/antigravity/brain/5caba494-934b-4cc7-9f1e-b2dcce7dbae8/bengaluru_approximate_markers_5023.png")
         print("Saved screenshot: bengaluru_approximate_markers_5023.png")
 
-        # 5. Toggle Police Station References Layer ON
-        station_toggle = page.locator('#toggle-station-markers')
-        await station_toggle.check()
-        print("Toggled police stations ON, waiting for station markers...")
-        await page.wait_for_timeout(2500)
-
-        station_count = await page.evaluate("() => policeStationsLayer.getLayers().length")
-        print(f"policeStationsLayer marker count: {station_count}")
-        assert station_count == 1001, f"Expected 1,001 station reference markers, got {station_count}"
-
-        # Verify markersLayer count remained exactly 5023 (complete isolation!)
-        cluster_count_after = await page.evaluate("() => markersLayer.getLayers().length")
-        assert cluster_count_after == 5023, f"Incident markers count modified by station toggle! Got {cluster_count_after}"
-        print("Verified police stations are isolated in separate layer and incident layer stays 5,023.")
-
-        # Take screenshot of Station Reference Layer
-        await page.screenshot(path="C:/Users/Prakhyath S.L/.gemini/antigravity/brain/5caba494-934b-4cc7-9f1e-b2dcce7dbae8/police_stations_isolated_layer.png")
-        print("Saved screenshot: police_stations_isolated_layer.png")
-
-        # Toggle Police Station References Layer OFF
-        await station_toggle.uncheck()
-        await page.wait_for_timeout(500)
-        station_count_off = await page.evaluate("() => policeStationsLayer.getLayers().length")
-        assert station_count_off == 0, f"Expected 0 station markers after toggling off, got {station_count_off}"
-        print("Verified station markers removed when untoggled.")
+        # 5. Verify Police Station References Layer is completely removed from Safety Map DOM
+        assert await page.locator('#toggle-station-markers').count() == 0, "Station reference toggle must be absent from DOM"
+        cluster_count_isolated = await page.evaluate("() => markersLayer.getLayers().length")
+        assert cluster_count_isolated == 5023, f"Incident markers count must remain 5,023. Got {cluster_count_isolated}"
+        print("Verified police station references are completely isolated and incident layer stays 5,023.")
 
         # 6. Test Crime Category Filter
         print("Filtering by crime category THEFT...")
         await page.evaluate("() => filterMapByCrimeCategory('THEFT')")
-        await page.wait_for_timeout(3000)
+        await page.wait_for_function("() => markersLayer.getLayers().length > 0 && markersLayer.getLayers().length < 5023", timeout=30000)
 
         filtered_count = await page.evaluate("() => markersLayer.getLayers().length")
         print(f"Filtered THEFT marker count: {filtered_count}")
@@ -103,7 +83,7 @@ async def run_e2e():
         # Reset category filter back to all
         print("Resetting category filter to all...")
         await page.evaluate("() => filterMapByCrimeCategory('all')")
-        await page.wait_for_timeout(3000)
+        await page.wait_for_function("() => markersLayer.getLayers().length === 5023", timeout=30000)
         reset_count = await page.evaluate("() => markersLayer.getLayers().length")
         print(f"Reset marker count: {reset_count}")
         assert reset_count == 5023, f"Expected 5,023 markers restored, got {reset_count}"
@@ -112,16 +92,16 @@ async def run_e2e():
         mlr_btn = page.locator('button.city-btn[data-city="mangaluru"]')
         await mlr_btn.click()
         print("Switched to Mangaluru...")
-        await page.wait_for_timeout(2500)
+        await page.wait_for_function("() => markersLayer.getLayers().length === 1515", timeout=30000)
 
         mlr_plotted = await page.evaluate("() => markersLayer.getLayers().length")
         print(f"Mangaluru plotted count: {mlr_plotted}")
-        assert mlr_plotted > 0, "Mangaluru markers must be plotted"
+        assert mlr_plotted == 1515, f"Expected 1,515 Mangaluru markers, got {mlr_plotted}"
 
         # Switch back to Bengaluru
         await blr_btn.click()
         print("Switched back to Bengaluru...")
-        await page.wait_for_timeout(3000)
+        await page.wait_for_function("() => markersLayer.getLayers().length === 5023", timeout=30000)
         blr_restored = await page.evaluate("() => markersLayer.getLayers().length")
         print(f"Bengaluru restored count: {blr_restored}")
         assert blr_restored == 5023, f"Expected 5,023 Bengaluru markers restored, got {blr_restored}"

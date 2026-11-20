@@ -77,11 +77,9 @@ async def run():
 
         assert "BANASHANKARI" in panel_text.upper(), "Missing origin name in details panel"
         assert "INDIRANAGAR" in panel_text.upper(), "Missing destination name in details panel"
-        assert "HEURISTIC HISTORICAL INDICATOR" in panel_text.upper(), "Missing heuristic indicator label"
-        assert "ROUTE SEGMENT RISK COVERAGE" in panel_text.upper(), "Missing segment risk coverage section"
-        assert "MEASURED:" in panel_text.upper(), "Missing measured percentage breakdown"
-        assert "UNMEASURED:" in panel_text.upper(), "Missing unmeasured percentage breakdown"
-        assert "CONFIDENCE" in panel_text, "Missing confidence label"
+        assert "HISTORICAL THREAT SCORE" in panel_text.upper(), "Missing Historical Threat Score in clean details panel"
+        assert "TOTAL DISTANCE" in panel_text.upper(), "Missing Total Distance in details panel"
+        assert "ESTIMATED TRAVEL TIME" in panel_text.upper(), "Missing Estimated Travel Time in details panel"
         assert "mins" in badge_text, "Missing transit time in measured route badge"
         assert "/100" in panel_text, "Missing measured score fraction for measured route"
 
@@ -212,7 +210,7 @@ async def run():
         panel_mlr = await page.inner_text('#route-details-panel')
         assert "KADRI" in panel_mlr.upper(), "Missing Kadri in MLR route panel"
         assert "SURATHKAL" in panel_mlr.upper(), "Missing Surathkal in MLR route panel"
-        assert "ROUTE SEGMENT RISK COVERAGE" in panel_mlr.upper(), "Missing segment coverage in MLR panel"
+        assert "HISTORICAL THREAT SCORE" in panel_mlr.upper(), "Missing threat score in MLR panel"
         print('Verified Mangaluru place-to-place segmented routing.')
 
         # 8. Test Unmeasured Rural Corridor (displaying UNMEASURED without /100)
@@ -227,7 +225,7 @@ async def run():
         await page.wait_for_timeout(300)
 
         panel_text_unmeasured = await page.inner_text('#route-details-panel')
-        assert "INSUFFICIENT EVIDENCE" in panel_text_unmeasured.upper(), "Missing INSUFFICIENT EVIDENCE badge"
+        assert "HISTORICAL THREAT SCORE" in panel_text_unmeasured.upper(), "Missing HISTORICAL THREAT SCORE header"
         assert "UNMEASURED" in panel_text_unmeasured.upper(), "Unmeasured corridor must display UNMEASURED rather than numeric score"
         assert "/100" not in panel_text_unmeasured, "Unmeasured corridor must NEVER display a numeric /100 score"
         print('Verified unmeasured corridor displays UNMEASURED.')

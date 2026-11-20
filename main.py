@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from collections import defaultdict
-import joblib, os, math, json, hashlib, urllib.request, urllib.error, re
+import joblib, os, math, json, hashlib, urllib.request, urllib.error, re, time
 import numpy as np
 import pandas as pd
 
@@ -184,12 +184,14 @@ def load_crime_data():
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
         
         # Parse datetime
+        if 'date' in df.columns:
+            date_parsed = pd.to_datetime(df['date'], errors='coerce')
+            df['year'] = date_parsed.dt.year
+            df['month'] = date_parsed.dt.month
+            df['day_of_week'] = date_parsed.dt.dayofweek
         if 'date' in df.columns and 'time' in df.columns:
             df['datetime'] = pd.to_datetime(df['date'] + ' ' + df['time'], errors='coerce')
             df['hour'] = df['datetime'].dt.hour
-            df['day_of_week'] = df['datetime'].dt.dayofweek
-            df['month'] = df['datetime'].dt.month
-            df['year'] = df['datetime'].dt.year
         
         # Clean coordinates
         df['latitude'] = pd.to_numeric(df['latitude'], errors='coerce')
@@ -211,6 +213,12 @@ def load_crime_data():
         df['evidence'] = evidences
         
         crime_data = df
+        
+        # Populate training-time place label encoder mapping from dataset
+        global BLR_PLACE_ENCODER
+        if 'place' in df.columns:
+            place_names = sorted(df['place'].dropna().astype(str).unique())
+            BLR_PLACE_ENCODER = {name.strip().lower(): idx for idx, name in enumerate(place_names)}
         
         # Build location cache (aggregate by area)
         build_location_cache()
@@ -760,8 +768,26 @@ CRIME_CLASSES = [
     'Murder', 'Ordinary Theft', 'Rape', 'Robbery'
 ]
 
-def predict_with_model(lat, lon, hour=12, day_of_week=0, month=None):
-    """Predict crime category and confidence using the loaded Bengaluru XGBoost model"""
+# Reconstructed training-time label encoder mappings for Bengaluru XGBoost model
+# Exactly corresponds to LabelEncoder().fit(bengaluru_dataset['Police Station'])
+BLR_PS_ENCODER = {
+    'anekal': 0, 'attibele': 1, 'banashankari': 2, 'basavanagudi': 3,
+    'c k achuktu': 4, 'ck achuktu': 4, 'c k achukattu': 4, 'chandapura': 5,
+    'electronic city': 6, 'girinagar': 7, 'hanumantha nagar': 8, 'hebbal': 9,
+    'indiranagar': 10, 'j p nagar': 11, 'jp nagar': 11, 'jayanagar': 12,
+    'k g nagar': 13, 'kg nagar': 13, 'k s layout': 14, 'ks layout': 14,
+    'konanakunte': 15, 'koramangala': 16, 'puttenahalli': 17, 'rajajinagar': 18,
+    'shankarapua': 19, 'shankarapura': 19, 'siddapura': 20, 'subramanyapura': 21,
+    'thalaghtappura': 22, 'thalaghattapura': 22, 'v v puram': 23, 'vv puram': 23,
+    'whitefield': 24, 'yelahanka': 25
+}
+BLR_PLACE_ENCODER = {}
+
+def predict_with_model(lat, lon, hour=12, day_of_week=0, month=None, police_station=None, place=None):
+    """Predict crime category and confidence using the loaded Bengaluru XGBoost model.
+    Dynamically encodes the nearest verified police station and place using exact
+    training-time label encoder mappings. Unseen or unknown categories safely resolve to
+    np.nan, which XGBoost natively supports without assigning arbitrary integers."""
     if model is None:
         raise ValueError("Model not loaded")
     
@@ -778,6 +804,18 @@ def predict_with_model(lat, lon, hour=12, day_of_week=0, month=None):
         pod = 2
     else:
         pod = 3
+
+    ps_code = np.nan
+    if police_station:
+        ps_clean = str(police_station).strip().lower().replace(' police station', '').replace(' ps', '').strip()
+        if ps_clean in BLR_PS_ENCODER:
+            ps_code = float(BLR_PS_ENCODER[ps_clean])
+
+    pl_code = np.nan
+    if place:
+        pl_clean = str(place).strip().lower()
+        if pl_clean in BLR_PLACE_ENCODER:
+            pl_code = float(BLR_PLACE_ENCODER[pl_clean])
         
     df_feat = pd.DataFrame([{
         'Latitude': float(lat),
@@ -786,8 +824,8 @@ def predict_with_model(lat, lon, hour=12, day_of_week=0, month=None):
         'DayOfWeek': d,
         'Month': m,
         'PartOfDay': pod,
-        'Police Station': 0,
-        'Place': 0
+        'Police Station': ps_code,
+        'Place': pl_code
     }])
     
     try:
@@ -1037,6 +1075,9 @@ class PredictRequest(BaseModel):
     longitude: float = Field(..., ge=-90, le=90)
     hour: Optional[int] = Field(None, ge=0, le=23)
     day_of_week: Optional[int] = Field(None, ge=0, le=6)
+    month: Optional[int] = Field(None, ge=1, le=12)
+    place: Optional[str] = None
+    police_station: Optional[str] = None
 
 class RouteRequest(BaseModel):
     src_lat: Optional[float] = None
@@ -1056,6 +1097,71 @@ class RouteRequest(BaseModel):
     departure_time: Optional[str] = None
     hour: Optional[int] = None
     day_of_week: Optional[int] = None
+
+def validate_and_parse_departure_time(time_str: Optional[str]) -> tuple[Optional[int], Optional[str]]:
+    """Strictly validate and parse optional departure time.
+    Accepts 12-hour format with AM/PM (e.g. '10:30 PM', '8:00 AM') or 24-hour ('22:30').
+    Returns (hour_int_0_23, display_12h_string).
+    If time_str is None or empty/whitespace, returns (None, None).
+    If time_str is invalid, strictly raises HTTPException(status_code=400).
+    """
+    if time_str is None:
+        return None, None
+    s = str(time_str).strip()
+    if not s or s.lower() in ("none", "null", "any", "unspecified", "any time"):
+        return None, None
+        
+    # Check 12-hour format with AM/PM e.g. "10:30 PM", "8:15 AM", "12:00 pm"
+    m_12 = re.match(r"^(\d{1,2}):(\d{2})\s*(AM|PM)$", s, re.IGNORECASE)
+    if m_12:
+        h = int(m_12.group(1))
+        m = int(m_12.group(2))
+        mer = m_12.group(3).upper()
+        if not (1 <= h <= 12 and 0 <= m <= 59):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid 12-hour time '{s}'. Hour must be 1-12 and minute must be 00-59."
+            )
+        hour_24 = 0 if (h == 12 and mer == "AM") else (12 if (h == 12 and mer == "PM") else (h + 12 if mer == "PM" else h))
+        return hour_24, f"{h}:{m:02d} {mer}"
+        
+    # Check 24-hour format e.g. "22:30", "08:15"
+    m_24 = re.match(r"^(\d{1,2}):(\d{2})$", s)
+    if m_24:
+        h = int(m_24.group(1))
+        m = int(m_24.group(2))
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid 24-hour time '{s}'. Hour must be 00-23 and minute must be 00-59."
+            )
+        mer = "AM" if h < 12 else "PM"
+        h12 = 12 if h in (0, 12) else h % 12
+        return h, f"{h12}:{m:02d} {mer}"
+        
+    raise HTTPException(
+        status_code=400,
+        detail=f"Invalid departure time '{s}'. Must be a valid 12-hour time with AM/PM (e.g. '10:30 PM') or 24-hour time ('22:30')."
+    )
+
+def get_time_window_info(eval_hour: int) -> dict:
+    """Calculate the ±2-hour historical window around eval_hour handling midnight wrap-around."""
+    window_hours = {(eval_hour + offset) % 24 for offset in (-2, -1, 0, 1, 2)}
+    start_h = (eval_hour - 2) % 24
+    end_h = (eval_hour + 2) % 24
+    
+    start_mer = "AM" if start_h < 12 else "PM"
+    start_h12 = 12 if start_h in (0, 12) else start_h % 12
+    end_mer = "AM" if end_h < 12 else "PM"
+    end_h12 = 12 if end_h in (0, 12) else end_h % 12
+    
+    window_label = f"{start_h12}:00 {start_mer} – {end_h12}:00 {end_mer} (±2h window)"
+    return {
+        "window_hours": sorted(list(window_hours)),
+        "start_hour": start_h,
+        "end_hour": end_h,
+        "window_label": window_label
+    }
 
 class SegmentIncidentsRequest(BaseModel):
     polyline: List[List[float]]
@@ -1139,20 +1245,40 @@ def predict(req: PredictRequest):
             "nearby_police_stations": nearby_police
         }
     
-    # Bengaluru model prediction
+    # Resolve location context, nearest police station, and place for Bengaluru
+    risk_score = calculate_risk_score(lat, lon, hour, day)
+    location_data, distance = get_nearest_location_data(lat, lon, city_scope="bengaluru")
+    nearby_police = get_nearest_police_stations(lat, lon, limit=3)
+    
+    # Resolve target police station and place for dynamic feature encoding
+    target_ps = req.police_station
+    if not target_ps and location_data and location_data.get('police_station'):
+        target_ps = location_data.get('police_station')
+    if not target_ps and nearby_police:
+        for ps_entry in nearby_police:
+            if ps_entry.get('city') == 'Bengaluru' and (ps_entry.get('area') or ps_entry.get('name')):
+                target_ps = ps_entry.get('area') or ps_entry.get('name')
+                break
+
+    target_place = req.place
+    if not target_place and location_data and location_data.get('place'):
+        target_place = location_data.get('place')
+
+    # Bengaluru model prediction with dynamic feature encoding
     predicted_crime = None
     confidence = None
     used_model = False
     
     if model_info["loaded"]:
         try:
-            predicted_crime, confidence = predict_with_model(lat, lon, hour, day)
+            predicted_crime, confidence = predict_with_model(
+                lat, lon, hour, day, month=req.month,
+                police_station=target_ps,
+                place=target_place
+            )
             used_model = True
         except Exception as e:
             print(f"Model prediction failed: {e}")
-    
-    risk_score = calculate_risk_score(lat, lon, hour, day)
-    location_data, distance = get_nearest_location_data(lat, lon, city_scope="bengaluru")
     
     if not predicted_crime and location_data:
         predicted_crime = location_data.get('most_common', 'Unknown')
@@ -1164,7 +1290,6 @@ def predict(req: PredictRequest):
     recommendations = get_safety_recommendations(risk_score, hour, predicted_crime)
     density = get_incident_density(lat, lon)
     nearest_high_risk = get_nearest_high_risk_zones(lat, lon, limit=3, city="bengaluru")
-    nearby_police = get_nearest_police_stations(lat, lon, limit=3)
     
     return {
         "latitude": lat,
@@ -1175,7 +1300,7 @@ def predict(req: PredictRequest):
         "confidence": round(confidence, 1),
         "recommendations": recommendations,
         "nearby_crimes": location_data['crime_count'] if location_data else 0,
-        "nearest_police": location_data['police_station'] if location_data else "Unknown",
+        "nearest_police": target_ps if target_ps else (location_data['police_station'] if location_data else "Unknown"),
         "distance_to_data": round(distance, 2) if distance else None,
         "used_model": used_model,
         "hour": hour,
@@ -1267,7 +1392,7 @@ def get_crime_trends(city: Optional[str] = None):
     if 'year' in df.columns:
         yearly = df.groupby('year').size().reset_index(name='count').sort_values('year')
         for _, row in yearly.iterrows():
-            if pd.notna(row['year']) and int(row['year']) > 2000:
+            if pd.notna(row['year']) and int(row['year']) >= 2015:
                 trends.append({
                     "date": str(int(row['year'])),
                     "count": int(row['count'])
@@ -1276,36 +1401,55 @@ def get_crime_trends(city: Optional[str] = None):
     crime_types = df['type'].value_counts().head(10).to_dict()
     
     hourly = {}
+    total_timestamped = 0
     if 'hour' in df.columns and df['hour'].notna().any():
         h_counts = df['hour'].dropna().astype(int).value_counts().sort_index().to_dict()
         hourly = {int(k): int(v) for k, v in h_counts.items()}
+        total_timestamped = sum(hourly.values())
     
+    min_year = None
+    max_year = None
+    if 'year' in df.columns:
+        valid_years = df['year'].dropna()
+        valid_years = valid_years[valid_years >= 2015]
+        if not valid_years.empty:
+            min_year = str(int(valid_years.min()))
+            max_year = str(int(valid_years.max()))
+
     return {
         "city": scope,
         "monthly_trends": trends,
+        "yearly_trends": trends,
         "crime_types": {k: int(v) for k, v in crime_types.items()},
         "hourly_distribution": hourly,
+        "total_timestamped": total_timestamped,
         "total_crimes": len(df),
         "date_range": {
-            "start": str(int(df['year'].min())) if 'year' in df.columns and pd.notna(df['year'].min()) else None,
-            "end": str(int(df['year'].max())) if 'year' in df.columns and pd.notna(df['year'].max()) else None
+            "start": min_year,
+            "end": max_year
         }
     }
 
 ROUTING_SERVICE_URL = os.environ.get("ROUTING_SERVICE_URL", "https://router.project-osrm.org/route/v1/driving")
 ROAD_ROUTE_CACHE = {}
 
-def fetch_road_route(src_lat: float, src_lon: float, dst_lat: float, dst_lon: float, timeout_sec: float = 6.0):
+def fetch_road_route(src_lat: float, src_lon: float, dst_lat: float, dst_lon: float, timeout_sec: float = 12.0):
     """Query configured road routing service (OSRM) to retrieve actual road network geometry.
     Returns dict with polyline coordinates [[lat, lon], ...], distance_km, estimated_time_min,
-    or None if unavailable. Implements route caching and transient retry."""
+    or None if unavailable. Implements route caching, mirror fallback, and transient retry."""
     cache_key = f"{src_lat:.4f},{src_lon:.4f}->{dst_lat:.4f},{dst_lon:.4f}"
     if cache_key in ROAD_ROUTE_CACHE:
         return ROAD_ROUTE_CACHE[cache_key]
         
-    url = f"{ROUTING_SERVICE_URL}/{src_lon},{src_lat};{dst_lon},{dst_lat}?overview=full&geometries=geojson"
-    req = urllib.request.Request(url, headers={"User-Agent": "BEACON-Public-Safety-Intelligence/2.0"})
-    for attempt in range(2):
+    service_endpoints = [
+        ROUTING_SERVICE_URL,
+        "https://routing.openstreetmap.de/routed-car/route/v1/driving"
+    ]
+    
+    for attempt in range(len(service_endpoints)):
+        base_endpoint = service_endpoints[attempt]
+        url = f"{base_endpoint}/{src_lon},{src_lat};{dst_lon},{dst_lat}?overview=full&geometries=geojson"
+        req = urllib.request.Request(url, headers={"User-Agent": "BEACON-Public-Safety-Intelligence/2.0"})
         try:
             with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
                 if resp.status != 200:
@@ -1328,8 +1472,10 @@ def fetch_road_route(src_lat: float, src_lon: float, dst_lat: float, dst_lon: fl
                 ROAD_ROUTE_CACHE[cache_key] = res
                 return res
         except Exception as e:
-            if attempt == 1:
-                print(f"⚠️ Road routing service request failed after retry: {e}")
+            if attempt == len(service_endpoints) - 1:
+                print(f"⚠️ Road routing service request failed after retry and mirror fallback: {e}")
+            else:
+                time.sleep(0.5)
             pass
     return None
 
@@ -1503,13 +1649,15 @@ def safe_route(req: RouteRequest):
     # Identify regional scope
     is_mlr = is_mangaluru_coordinate(src[0], src[1]) or is_mangaluru_coordinate(dst[0], dst[1])
     
-    # Parse evaluation hour
-    eval_hour = req.hour
-    if eval_hour is None and req.departure_time:
-        try:
-            eval_hour = int(req.departure_time.split(':')[0])
-        except Exception:
-            eval_hour = None
+    # Parse evaluation hour strictly
+    eval_hour, dep_time_12h = validate_and_parse_departure_time(req.departure_time)
+    if eval_hour is None and req.hour is not None:
+        if not (0 <= req.hour <= 23):
+            raise HTTPException(status_code=400, detail="Invalid hour. Must be between 0 and 23.")
+        eval_hour = req.hour
+        h12 = 12 if eval_hour in (0, 12) else eval_hour % 12
+        mer = "AM" if eval_hour < 12 else "PM"
+        dep_time_12h = f"{h12}:00 {mer}"
             
     # Calculate incident proximity against the actual road polyline segments (corridor buffer: 1.2 km)
     corridor_buffer_km = 1.2
@@ -1520,80 +1668,120 @@ def safe_route(req: RouteRequest):
     unverified_nearby = 0
     mismatches_excluded = 0
     
+    corridor_valid_timestamps = 0
+    window_incidents = 0
+    w_info = get_time_window_info(eval_hour) if eval_hour is not None else None
+    
     corridor_category_weights = []
     corridor_distances = []
     
-    sub_dedup = pd.DataFrame()
-    coords_arr = np.empty((0, 2))
+    buf_deg = (corridor_buffer_km / 111.0) * 1.5
+    all_lats = [p[0] for p in full_polyline]
+    all_lons = [p[1] for p in full_polyline]
+    min_lat = min(all_lats) - buf_deg
+    max_lat = max(all_lats) + buf_deg
+    min_lon = min(all_lons) - buf_deg
+    max_lon = max(all_lons) + buf_deg
     
+    candidate_sources = []
     if is_mlr:
-        df_target = mangaluru_crime_data if mangaluru_crime_data is not None else pd.DataFrame()
-        prefix = "MLR"
+        if mangaluru_crime_data is not None and not mangaluru_crime_data.empty:
+            candidate_sources.append(("MLR", mangaluru_crime_data))
+        if crime_data is not None and not crime_data.empty:
+            candidate_sources.append(("BLR", crime_data))
     else:
-        df_target = crime_data if crime_data is not None else pd.DataFrame()
-        prefix = "BLR"
-        
-    if not df_target.empty and 'latitude' in df_target.columns and 'longitude' in df_target.columns:
-        buf_deg = (corridor_buffer_km / 111.0) * 1.5
-        all_lats = [p[0] for p in full_polyline]
-        all_lons = [p[1] for p in full_polyline]
-        min_lat = min(all_lats) - buf_deg
-        max_lat = max(all_lats) + buf_deg
-        min_lon = min(all_lons) - buf_deg
-        max_lon = max(all_lons) + buf_deg
-        
-        sub = df_target[
-            (df_target['latitude'] >= min_lat) & (df_target['latitude'] <= max_lat) &
-            (df_target['longitude'] >= min_lon) & (df_target['longitude'] <= max_lon)
+        if crime_data is not None and not crime_data.empty:
+            candidate_sources.append(("BLR", crime_data))
+        if mangaluru_crime_data is not None and not mangaluru_crime_data.empty:
+            candidate_sources.append(("MLR", mangaluru_crime_data))
+            
+    combined_corridor_rows = []
+    combined_coords_list = []
+    
+    for prefix, df_source in candidate_sources:
+        if df_source.empty or 'latitude' not in df_source.columns or 'longitude' not in df_source.columns:
+            continue
+            
+        sub = df_source[
+            (df_source['latitude'] >= min_lat) & (df_source['latitude'] <= max_lat) &
+            (df_source['longitude'] >= min_lon) & (df_source['longitude'] <= max_lon)
         ].copy()
         
-        if not sub.empty:
-            # Deduplicate candidate records to prevent duplicate inflation
-            if 'date' in sub.columns and 'type' in sub.columns:
-                sub_dedup = sub.drop_duplicates(subset=['latitude', 'longitude', 'date', 'type'])
+        if sub.empty:
+            continue
+            
+        # Deduplicate candidate records to prevent duplicate inflation
+        if 'date' in sub.columns and 'type' in sub.columns:
+            sub_d = sub.drop_duplicates(subset=['latitude', 'longitude', 'date', 'type'])
+        else:
+            sub_d = sub.drop_duplicates(subset=['latitude', 'longitude'])
+            
+        coords = sub_d[['latitude', 'longitude']].values
+        if len(coords) == 0:
+            continue
+            
+        min_dist_to_route = point_to_polyline_distances(coords, full_polyline)
+        in_corridor_mask = (min_dist_to_route <= corridor_buffer_km)
+        in_corridor_indices = sub_d.index[in_corridor_mask]
+        in_corridor_dists = min_dist_to_route[in_corridor_mask]
+        
+        for idx, dist_val in zip(in_corridor_indices, in_corridor_dists):
+            row_record = sub_d.loc[idx]
+            source_id = int(row_record.get('source_row_id', idx + 1))
+            rec_id = f"{prefix}-{source_id:04d}"
+            audit_meta = get_audit_record_metadata(rec_id)
+            status = audit_meta.get("validation_status", "LOCATION_UNVERIFIED")
+            
+            if status == "INCIDENT_LOCATION_VERIFIED":
+                verified_nearby += 1
+            elif status == "LOCALITY_MATCH_ONLY":
+                locality_nearby += 1
+            elif status == "POLICE_STATION_COORDINATE":
+                ps_nearby += 1
+                continue  # Excluded from crime-scene risk and category weights
+            elif status == "LOCATION_MISMATCH":
+                mismatches_excluded += 1
+                continue  # Excluded from spatial analysis entirely
             else:
-                sub_dedup = sub.drop_duplicates(subset=['latitude', 'longitude'])
+                unverified_nearby += 1
                 
-            coords_arr = sub_dedup[['latitude', 'longitude']].values
-            min_dist_to_route = point_to_polyline_distances(coords_arr, full_polyline)
-            
-            in_corridor_mask = (min_dist_to_route <= corridor_buffer_km)
-            in_corridor_indices = sub_dedup.index[in_corridor_mask]
-            in_corridor_dists = min_dist_to_route[in_corridor_mask]
-            
-            for idx, dist_val in zip(in_corridor_indices, in_corridor_dists):
-                row_record = sub_dedup.loc[idx]
-                source_id = int(row_record.get('source_row_id', idx + 1))
-                rec_id = f"{prefix}-{source_id:04d}"
-                audit_meta = get_audit_record_metadata(rec_id)
-                status = audit_meta.get("validation_status", "LOCATION_UNVERIFIED")
+            # Collect crime category severity weight for verified and locality/unverified crime scenes
+            c_type_str = str(row_record.get('type', row_record.get('Crime_Category', ''))).lower()
+            if any(w in c_type_str for w in ['murder', 'rape', 'pocso', 'kidnapping']):
+                corridor_category_weights.append(25.0)
+            elif any(w in c_type_str for w in ['robbery', 'extortion', 'dacoity', 'assault', 'snatching']):
+                corridor_category_weights.append(15.0)
+            elif any(w in c_type_str for w in ['theft', 'burglary', 'housebreak', 'vehicle']):
+                corridor_category_weights.append(8.0)
+            else:
+                corridor_category_weights.append(4.0)
                 
-                if status == "INCIDENT_LOCATION_VERIFIED":
-                    verified_nearby += 1
-                elif status == "LOCALITY_MATCH_ONLY":
-                    locality_nearby += 1
-                elif status == "POLICE_STATION_COORDINATE":
-                    ps_nearby += 1
-                    continue  # Excluded from crime-scene risk and category weights
-                elif status == "LOCATION_MISMATCH":
-                    mismatches_excluded += 1
-                    continue  # Excluded from spatial analysis entirely
-                else:
-                    unverified_nearby += 1
-                    
-                # Collect crime category severity weight for verified and locality/unverified crime scenes
-                row_record = sub_dedup.loc[idx]
-                c_type_str = str(row_record.get('type', row_record.get('Crime_Category', ''))).lower()
-                if any(w in c_type_str for w in ['murder', 'rape', 'pocso', 'kidnapping']):
-                    corridor_category_weights.append(25.0)
-                elif any(w in c_type_str for w in ['robbery', 'extortion', 'dacoity', 'assault', 'snatching']):
-                    corridor_category_weights.append(15.0)
-                elif any(w in c_type_str for w in ['theft', 'burglary', 'housebreak', 'vehicle']):
-                    corridor_category_weights.append(8.0)
-                else:
-                    corridor_category_weights.append(4.0)
-                    
-                corridor_distances.append(float(dist_val))
+            corridor_distances.append(float(dist_val))
+            
+            # Track temporal distribution where reliable timestamps exist from dataset
+            if prefix != "MLR" and 'hour' in sub_d.columns:
+                h_val = row_record.get('hour')
+                if pd.notna(h_val):
+                    try:
+                        h_int = int(h_val)
+                        corridor_valid_timestamps += 1
+                        if w_info and h_int in w_info["window_hours"]:
+                            window_incidents += 1
+                    except (ValueError, TypeError):
+                        pass
+                        
+            row_dict = dict(row_record)
+            row_dict['_prefix'] = prefix
+            row_dict['_audit_status'] = status
+            combined_corridor_rows.append(row_dict)
+            combined_coords_list.append([float(row_record['latitude']), float(row_record['longitude'])])
+            
+    if combined_corridor_rows:
+        sub_dedup = pd.DataFrame(combined_corridor_rows)
+        coords_arr = np.array(combined_coords_list)
+    else:
+        sub_dedup = pd.DataFrame()
+        coords_arr = np.empty((0, 2))
 
     # Total deduplicated crime-scene incidents along corridor (police station coordinates excluded from crime scenes)
     total_crime_scenes = verified_nearby + locality_nearby + unverified_nearby
@@ -1639,20 +1827,11 @@ def safe_route(req: RouteRequest):
         mean_d = float(np.mean(corridor_distances)) if corridor_distances else 0.5
         s_proximity = max(0.6, round(1.0 - (mean_d / 2.4), 2))
         
-        # Temporal scoring (STRICTLY DISABLED for Mangaluru because FIR timestamps are missing)
+        # Safeguard 1: Do not add arbitrary fixed temporal adjustments (+15, +8, +4) to the corridor threat score.
+        # Report the historical time-window distribution separately in temporal_analysis without changing the baseline risk score.
         s_temporal = 0.0
-        if not is_mlr and eval_hour is not None:
-            if 22 <= eval_hour or eval_hour <= 4:
-                s_temporal += 15.0  # Night
-            elif 18 <= eval_hour <= 21:
-                s_temporal += 8.0   # Evening
-            elif 6 <= eval_hour <= 9:
-                s_temporal += 4.0   # Morning rush
-                
-        if not is_mlr and req.day_of_week is not None and req.day_of_week >= 5:
-            s_temporal += 4.0       # Weekend
             
-        raw_threat = (s_density * s_proximity) + s_severity + s_temporal
+        raw_threat = (s_density * s_proximity) + s_severity
         avg_risk = min(100.0, max(10.0, round(raw_threat, 1)))
         
         # Strictly Calibrated Confidence Status
@@ -1690,10 +1869,13 @@ def safe_route(req: RouteRequest):
             
             for idx, dist_val in zip(seg_indices, seg_dists_filtered):
                 row_record = sub_dedup.loc[idx]
-                source_id = int(row_record.get('source_row_id', idx + 1))
-                rec_id = f"{prefix}-{source_id:04d}"
-                audit_meta = get_audit_record_metadata(rec_id)
-                status = audit_meta.get("validation_status", "LOCATION_UNVERIFIED")
+                prefix_val = row_record.get('_prefix', prefix)
+                status = row_record.get('_audit_status')
+                if not status:
+                    source_id = int(row_record.get('source_row_id', idx + 1))
+                    rec_id = f"{prefix_val}-{source_id:04d}"
+                    audit_meta = get_audit_record_metadata(rec_id)
+                    status = audit_meta.get("validation_status", "LOCATION_UNVERIFIED")
                 
                 if status == "INCIDENT_LOCATION_VERIFIED":
                     seg_verified += 1
@@ -1744,18 +1926,9 @@ def safe_route(req: RouteRequest):
             mean_d_seg = float(np.mean(seg_distances)) if seg_distances else 0.5
             s_prox_seg = max(0.6, round(1.0 - (mean_d_seg / 2.4), 2))
             
+            # Safeguard 1: Do not add arbitrary fixed temporal adjustments to road segments
             s_temp_seg = 0.0
-            if not is_mlr and eval_hour is not None:
-                if 22 <= eval_hour or eval_hour <= 4:
-                    s_temp_seg += 15.0
-                elif 18 <= eval_hour <= 21:
-                    s_temp_seg += 8.0
-                elif 6 <= eval_hour <= 9:
-                    s_temp_seg += 4.0
-            if not is_mlr and req.day_of_week is not None and req.day_of_week >= 5:
-                s_temp_seg += 4.0
-                
-            raw_seg_threat = (s_dens_seg * s_prox_seg) + s_sev_seg + s_temp_seg
+            raw_seg_threat = (s_dens_seg * s_prox_seg) + s_sev_seg
             seg_score = min(100.0, max(10.0, round(raw_seg_threat, 1)))
             
             seg_num = 1.0 * seg_verified + 0.85 * seg_locality
@@ -1862,6 +2035,60 @@ def safe_route(req: RouteRequest):
             "risk": pt_risk
         })
 
+    # Evaluate timestamp coverage sufficiency
+    has_sufficient_timestamps = (corridor_valid_timestamps > 0)
+    if is_mlr and corridor_valid_timestamps == 0:
+        has_sufficient_timestamps = False
+    elif total_crime_scenes > 0 and (corridor_valid_timestamps / total_crime_scenes) < 0.20:
+        has_sufficient_timestamps = False
+
+    if eval_hour is None:
+        coverage_pct = round((corridor_valid_timestamps / total_crime_scenes * 100), 1) if total_crime_scenes > 0 else 0.0
+        temporal_analysis = {
+            "status": "NOT_SPECIFIED",
+            "message": "All-day baseline historical analysis (departure time not specified).",
+            "short_line": None,
+            "has_temporal_data": False,
+            "departure_time": None,
+            "eval_hour": None,
+            "valid_timestamp_incidents": corridor_valid_timestamps,
+            "total_corridor_incidents": total_crime_scenes,
+            "temporal_coverage_percent": coverage_pct,
+            "limitation_note": "Departure time not selected. Corridor risk evaluated using all-day spatial density and category severity baseline."
+        }
+    elif not has_sufficient_timestamps:
+        temporal_analysis = {
+            "status": "UNAVAILABLE",
+            "message": "Time-based historical analysis unavailable for this location due to insufficient timestamp data.",
+            "short_line": "Historical time data unavailable for this corridor.",
+            "has_temporal_data": False,
+            "departure_time": dep_time_12h,
+            "eval_hour": eval_hour,
+            "valid_timestamp_incidents": corridor_valid_timestamps if not is_mlr else 0,
+            "total_corridor_incidents": total_crime_scenes,
+            "temporal_coverage_percent": 0.0 if is_mlr else round((corridor_valid_timestamps / total_crime_scenes * 100), 1),
+            "limitation_note": "Time-based historical analysis unavailable for this location due to insufficient timestamp data. Spatial risk and category severity remain fully evaluated."
+        }
+    else:
+        coverage_pct = round((corridor_valid_timestamps / total_crime_scenes * 100), 1) if total_crime_scenes > 0 else 0.0
+        pct_window = round((window_incidents / corridor_valid_timestamps * 100), 1) if corridor_valid_timestamps > 0 else 0.0
+        temporal_analysis = {
+            "status": "AVAILABLE",
+            "message": f"Historical time-of-day pattern evaluated for {dep_time_12h} IST ({w_info['window_label']}).",
+            "short_line": f"Historical time pattern: {window_incidents} of {total_crime_scenes} corridor incidents",
+            "has_temporal_data": True,
+            "departure_time": dep_time_12h,
+            "eval_hour": eval_hour,
+            "time_window": w_info["window_label"],
+            "window_hours": w_info["window_hours"],
+            "valid_timestamp_incidents": corridor_valid_timestamps,
+            "total_corridor_incidents": total_crime_scenes,
+            "temporal_coverage_percent": coverage_pct,
+            "incidents_in_time_window": window_incidents,
+            "time_window_incident_percent": pct_window,
+            "methodology": "corridor_incident_time_window_evaluation"
+        }
+
     return {
         "route": route_points,
         "route_polyline": full_polyline,
@@ -1892,10 +2119,11 @@ def safe_route(req: RouteRequest):
         },
         "temporal_policy": {
             "city": "Mangaluru" if is_mlr else "Bengaluru",
-            "scoring_status": "disabled_due_to_missing_fir_timestamps" if is_mlr else "active_from_recorded_timestamps",
+            "scoring_status": "disabled_due_to_missing_fir_timestamps" if is_mlr else ("active_from_recorded_timestamps" if eval_hour is not None else "baseline_all_day_density_severity"),
             "applied_hour": None if is_mlr else eval_hour,
-            "applied_day_of_week": None if is_mlr else req.day_of_week
-        }
+            "applied_day_of_week": None
+        },
+        "temporal_analysis": temporal_analysis
     }
 
 def normalize_incident_date(date_val):

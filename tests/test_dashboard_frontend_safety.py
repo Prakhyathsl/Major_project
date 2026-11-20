@@ -78,13 +78,14 @@ async def run_dashboard_tests():
 
         # Test city scope filter (Mangaluru via top bar)
         await page.click('#btn-city-mlr')
-        await page.wait_for_timeout(500)
+        await page.wait_for_selector('#high-risk-zones-container tr:has-text("MLR")', timeout=10000)
         mlr_badges = await page.locator('#high-risk-zones-container tr:has-text("MLR")').count()
         assert mlr_badges > 0, "Mangaluru city scope must display MLR zones"
         print("Verified city filter updates High-Risk Zones (MLR).")
 
         # Reset to Combined View
         await page.click('#btn-city-combined')
+        await page.wait_for_selector('#high-risk-zones-container table tbody tr', timeout=10000)
         await page.wait_for_timeout(500)
 
         # Test clicking a high-risk locality row -> navigates to Safety Map and opens popup

@@ -389,5 +389,119 @@ class TestTargetedAccuracyLogic(unittest.TestCase):
             self.assertEqual(acc["confidence_level"], "APPROXIMATE")
 
 
+class TestSafeRouteDirectionAndTemporalValidation(unittest.TestCase):
+    """Validation suite for directional road routing and time-aware historical risk analysis"""
+
+    BASE_URL = "http://127.0.0.1:8000"
+
+    def post_route(self, payload):
+        req = urllib.request.Request(
+            f"{self.BASE_URL}/api/safe-route",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req) as resp:
+            return resp.status, json.loads(resp.read().decode("utf-8"))
+
+    def test_01_directional_asymmetry_whitefield_koramangala(self):
+        """Whitefield -> Koramangala and Koramangala -> Whitefield have distinct directional properties"""
+        _, r_wk = self.post_route({"origin_name": "Whitefield", "destination_name": "Koramangala"})
+        _, r_kw = self.post_route({"origin_name": "Koramangala", "destination_name": "Whitefield"})
+
+        # Labels strictly match direction
+        self.assertIn("Whitefield", r_wk["origin_name"])
+        self.assertIn("Koramangala", r_wk["destination_name"])
+        self.assertIn("Koramangala", r_kw["origin_name"])
+        self.assertIn("Whitefield", r_kw["destination_name"])
+
+        # Asymmetric road network distances and transit durations
+        self.assertNotEqual(r_wk["distance_km"], r_kw["distance_km"])
+        self.assertGreater(r_wk["distance_km"], 18.0)
+        self.assertGreater(r_kw["distance_km"], 18.0)
+
+    def test_02_optional_departure_time_all_day_baseline(self):
+        """Route calculation succeeds when departure time is omitted, using all-day baseline"""
+        status, data = self.post_route({"origin_name": "Whitefield", "destination_name": "Koramangala"})
+        self.assertEqual(status, 200)
+        temp = data.get("temporal_analysis", {})
+        self.assertEqual(temp.get("status"), "NOT_SPECIFIED")
+        self.assertFalse(temp.get("has_temporal_data"))
+        self.assertIsNone(temp.get("departure_time"))
+        self.assertIsNone(temp.get("eval_hour"))
+        self.assertIn("All-day baseline", temp.get("message", ""))
+
+    def test_03_valid_12hour_am_pm_time(self):
+        """12-hour AM/PM format (e.g. 10:30 PM) parses to correct hour and produces temporal pattern"""
+        status, data = self.post_route({
+            "origin_name": "Whitefield",
+            "destination_name": "Koramangala",
+            "departure_time": "10:30 PM"
+        })
+        self.assertEqual(status, 200)
+        temp = data.get("temporal_analysis", {})
+        self.assertEqual(temp.get("status"), "AVAILABLE")
+        self.assertTrue(temp.get("has_temporal_data"))
+        self.assertEqual(temp.get("eval_hour"), 22)
+        self.assertEqual(temp.get("departure_time"), "10:30 PM")
+        self.assertIn("8:00 PM – 12:00 AM", temp.get("time_window", ""))
+        self.assertIn(22, temp.get("window_hours", []))
+
+    def test_04_midnight_wrap_around_handling(self):
+        """Midnight 12:00 AM (hour 0) window correctly wraps modulo 24 to [22, 23, 0, 1, 2]"""
+        status, data = self.post_route({
+            "origin_name": "Whitefield",
+            "destination_name": "Koramangala",
+            "departure_time": "12:00 AM"
+        })
+        self.assertEqual(status, 200)
+        temp = data.get("temporal_analysis", {})
+        self.assertEqual(temp.get("eval_hour"), 0)
+        self.assertEqual(temp.get("departure_time"), "12:00 AM")
+        self.assertEqual(temp.get("window_hours"), [0, 1, 2, 22, 23])
+        self.assertIn("10:00 PM – 2:00 AM", temp.get("time_window", ""))
+
+    def test_05_strict_rejection_of_invalid_time(self):
+        """Invalid time values are strictly rejected with HTTP 400 instead of clamped"""
+        invalid_times = ["25:00", "13:00 PM", "12:65 AM", "invalid_time", "99:99"]
+        for bad_t in invalid_times:
+            req = urllib.request.Request(
+                f"{self.BASE_URL}/api/safe-route",
+                data=json.dumps({"origin_name": "Whitefield", "destination_name": "Koramangala", "departure_time": bad_t}).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(req)
+            self.assertEqual(ctx.exception.code, 400, f"Expected 400 for invalid time '{bad_t}'")
+
+    def test_06_mangaluru_exact_unavailable_notice(self):
+        """Mangaluru routes return exact temporal-unavailable notice even when departure time is specified"""
+        status, data = self.post_route({
+            "src_lat": 12.8696,
+            "src_lon": 74.8423,
+            "dst_lat": 12.8799,
+            "dst_lon": 74.8554,
+            "departure_time": "8:00 PM"
+        })
+        self.assertEqual(status, 200)
+        temp = data.get("temporal_analysis", {})
+        self.assertEqual(temp.get("status"), "UNAVAILABLE")
+        self.assertFalse(temp.get("has_temporal_data"))
+        self.assertEqual(
+            temp.get("message"),
+            "Time-based historical analysis unavailable for this location due to insufficient timestamp data."
+        )
+        self.assertEqual(temp.get("temporal_coverage_percent"), 0.0)
+
+    def test_07_no_weekday_risk_calculated(self):
+        """Ensure day_of_week is not applied to risk calculation when date is omitted"""
+        _, r_no_date = self.post_route({
+            "origin_name": "Whitefield",
+            "destination_name": "Koramangala",
+            "departure_time": "10:30 PM"
+        })
+        policy = r_no_date.get("temporal_policy", {})
+        self.assertIsNone(policy.get("applied_day_of_week"))
+
+
 if __name__ == "__main__":
     unittest.main()
